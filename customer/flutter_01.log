@@ -1,0 +1,100 @@
+Flutter crash report.
+Please report a bug at https://github.com/flutter/flutter/issues.
+
+## command
+
+flutter run
+
+## exception
+
+FileSystemException: FileSystemException: Directory listing failed, path = '/Users/souafa/Documents/JOXMAKO/customer/ios/Runner 2.xcodeproj/' (OS Error: Operation timed out, errno = 60)
+
+```
+#0      _Directory._fillWithDirectoryListing (dart:io-patch/directory_patch.dart:49:4)
+#1      _Directory.listSync (dart:io/directory_impl.dart:259:5)
+#2      ForwardingDirectory.listSync (package:file/src/forwarding/forwarding_directory.dart:43:12)
+#3      ForwardingDirectory.listSync (package:file/src/forwarding/forwarding_directory.dart:43:12)
+#4      RunCommand._sharedAnalyticsUsageValues.<anonymous closure> (package:flutter_tools/src/commands/run.dart:621:14)
+<asynchronous suspension>
+#5      RunCommand.unifiedAnalyticsUsageValues (package:flutter_tools/src/commands/run.dart:546:47)
+<asynchronous suspension>
+#6      FlutterCommand.verifyThenRunCommand (package:flutter_tools/src/runner/flutter_command.dart:1935:22)
+<asynchronous suspension>
+#7      FlutterCommand.run.<anonymous closure> (package:flutter_tools/src/runner/flutter_command.dart:1590:27)
+<asynchronous suspension>
+#8      AppContext.run.<anonymous closure> (package:flutter_tools/src/base/context.dart:154:19)
+<asynchronous suspension>
+#9      CommandRunner.runCommand (package:args/command_runner.dart:212:13)
+<asynchronous suspension>
+#10     FlutterCommandRunner.runCommand.<anonymous closure> (package:flutter_tools/src/runner/flutter_command_runner.dart:496:9)
+<asynchronous suspension>
+#11     AppContext.run.<anonymous closure> (package:flutter_tools/src/base/context.dart:154:19)
+<asynchronous suspension>
+#12     FlutterCommandRunner.runCommand (package:flutter_tools/src/runner/flutter_command_runner.dart:431:5)
+<asynchronous suspension>
+#13     FlutterCommandRunner.run.<anonymous closure> (package:flutter_tools/src/runner/flutter_command_runner.dart:307:33)
+<asynchronous suspension>
+#14     run.<anonymous closure>.<anonymous closure> (package:flutter_tools/runner.dart:104:11)
+<asynchronous suspension>
+#15     AppContext.run.<anonymous closure> (package:flutter_tools/src/base/context.dart:154:19)
+<asynchronous suspension>
+#16     main (package:flutter_tools/executable.dart:103:3)
+<asynchronous suspension>
+```
+
+## flutter doctor
+
+```
+[32m[✓][39m Flutter (Channel stable, 3.41.9, on macOS 26.3.1 25D2128 darwin-arm64,
+    locale en-FR) [120ms]
+    [32m•[39m Flutter version 3.41.9 on channel stable at /opt/homebrew/share/flutter
+    [32m•[39m Upstream repository https://github.com/flutter/flutter.git
+    [32m•[39m Framework revision 00b0c91f06 (8 days ago), 2026-04-29 10:03:19 -0700
+    [32m•[39m Engine revision 42d3d75a56
+    [32m•[39m Dart version 3.11.5
+    [32m•[39m DevTools version 2.54.2
+    [32m•[39m Feature flags: enable-web, enable-linux-desktop, enable-macos-desktop,
+      enable-windows-desktop, enable-android, enable-ios, cli-animations,
+      enable-native-assets, omit-legacy-version-file, enable-lldb-debugging,
+      enable-uiscene-migration
+
+[32m[✓][39m Android toolchain - develop for Android devices (Android SDK version 36.0.0)
+    [1,695ms]
+    [32m•[39m Android SDK at /Users/souafa/Library/Android/sdk
+    [32m•[39m Emulator version 36.1.9.0 (build_id 13823996) (CL:N/A)
+    [32m•[39m Platform android-36, build-tools 36.0.0
+    [32m•[39m Java binary at: /Applications/Android
+      Studio.app/Contents/jbr/Contents/Home/bin/java
+      This is the JDK bundled with the latest Android Studio installation on
+      this machine.
+      To manually set the JDK path, use: `flutter config
+      --jdk-dir="path/to/jdk"`.
+    [32m•[39m Java version OpenJDK Runtime Environment (build 21.0.7+-13880790-b1038.58)
+    [32m•[39m All Android licenses accepted.
+
+[32m[✓][39m Xcode - develop for iOS and macOS (Xcode 26.4.1) [775ms]
+    [32m•[39m Xcode at /Applications/Xcode.app/Contents/Developer
+    [32m•[39m Build 17E202
+    [32m•[39m CocoaPods version 1.16.2
+
+[32m[✓][39m Chrome - develop for the web [3ms]
+    [32m•[39m Chrome at /Applications/Google Chrome.app/Contents/MacOS/Google Chrome
+
+[32m[✓][39m Connected device (3 available) [6.5s]
+    [32m•[39m iPhone (mobile) • 00008030-001C78110EF9402E • ios            • iOS 26.3.1
+      23D771330a
+    [32m•[39m macOS (desktop) • macos                     • darwin-arm64   • macOS
+      26.3.1 25D2128 darwin-arm64
+    [32m•[39m Chrome (web)    • chrome                    • web-javascript • Google
+      Chrome 148.0.7778.96
+    [33m![39m Error: Browsing on the local area network for 💕Soso🌹. Ensure the device
+      is unlocked and attached with a cable or associated with the same local
+      area network as this Mac.
+      The device must be opted into Developer Mode to connect wirelessly. (code
+      -27)
+
+[32m[✓][39m Network resources [335ms]
+    [32m•[39m All expected network resources are available.
+
+[32m•[39m No issues found!
+```

@@ -1,0 +1,604 @@
+<?php
+
+namespace App\Console\Commands;
+
+use GuzzleHttp\Client as HttpClient;
+use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Storage;
+use Google\Client as GoogleClient;
+
+/**
+ * php artisan firestore:cleanup-softlaunch --audit    ← Diagnose: count docs, show samples — NO writes
+ * php artisan firestore:cleanup-softlaunch --dry-run  ← List what would be deleted — no writes
+ * php artisan firestore:cleanup-softlaunch --force    ← Execute without confirmation
+ *
+ * SAFE: never deletes admin users, settings, sections, currencies,
+ * categories, payment config, or any system collection.
+ */
+class CleanupFirestoreSoftLaunch extends Command
+{
+    protected $signature   = 'firestore:cleanup-softlaunch
+                                {--audit   : Count docs per collection and show samples — no writes, verbose}
+                                {--dry-run : List what would be deleted — no writes}
+                                {--force   : Skip interactive confirmation and delete}';
+
+    protected $description = 'Safe pre-launch Firestore cleanup: removes test orders, users, chats, stale dispatches. Preserves all config/system data.';
+
+    private string     $projectId;
+    private string     $accessToken;
+    private HttpClient $http;
+
+    // ── Roles that are allowed to be deleted ─────────────────────────
+    private const DELETABLE_ROLES = ['customer', 'driver', 'vendor', 'provider', 'worker'];
+
+    // ── Collections wiped entirely ────────────────────────────────────
+    private const WIPE_COLLECTIONS = [
+        // Orders (all service types)
+        'rides',
+        'vendor_orders',
+        'parcel_orders',
+        'provider_orders',
+        'rental_orders',
+
+        // Finance (transactions only — NOT user wallet_amount field)
+        'wallet',
+        'cashback_redeem',
+
+        // Chat — all name variants used across driver / customer / vendor apps
+        'chat',
+        'chat_driver',
+        'chat_store',
+        'chat_restaurant',   // driver app legacy name
+        'chat_worker',       // customer app
+        'chat_provider',     // customer app
+
+        // Notifications / alerts
+        'dynamic_notification',
+        'notifications',
+
+        // User-generated content
+        'complaints',
+        'SOS',
+        'documents_verify',
+        'booked_table',
+        'items_review',
+        'foods_review',        // driver app legacy name for items_review
+        'favorite_item',
+        'favorite_vendor',
+        'favorite_restaurant', // driver/vendor app legacy name
+        'favorite_service',
+        'story',
+    ];
+
+    // ── Collections NEVER touched (documentation only) ───────────────
+    private const PROTECTED_COLLECTIONS = [
+        'settings', 'sections', 'currencies', 'tax', 'zone', 'on_boarding',
+        'documents', 'payouts', 'withdraw_method', 'vendor_attributes',
+        'vendor_categories', 'vendor_products', 'vendors', 'brands',
+        'parcel_categories', 'parcel_weight', 'vehicle_type', 'popular_destinations',
+        'provider_categories', 'providers_services', 'parcel_coupons', 'rental_coupons',
+        'coupons', 'promo_codes', 'rental_vehicle_type', 'rental_packages', 'referral',
+        'review_attributes', 'banner_items', 'advertisements', 'cashback', 'promos',
+        'gift_cards', 'gift_purchases', 'email_templates', 'giftCards', 'driver_payouts',
+        'menu_items', 'car_make', 'car_model', 'vehicle_type', 'subscription_plans',
+        'subscription_history', 'admin_products', 'vendor_employee_roles',
+    ];
+
+    private bool $dryRun = false;
+    private int  $totalDeleted = 0;
+    private int  $totalSkipped = 0;
+
+    // ══════════════════════════════════════════════════════════════════
+    // ENTRY POINT
+    // ══════════════════════════════════════════════════════════════════
+
+    public function handle(): int
+    {
+        $audit        = $this->option('audit');
+        $this->dryRun = $this->option('dry-run');
+        $force        = $this->option('force');
+
+        if (!Storage::disk('local')->has('firebase/credentials.json')) {
+            $this->error('[CLEANUP] credentials.json not found at storage/app/firebase/credentials.json');
+            return 1;
+        }
+
+        try {
+            $credJson        = json_decode(Storage::disk('local')->get('firebase/credentials.json'), true);
+            $this->projectId = $credJson['project_id'] ?? '';
+            if (empty($this->projectId)) {
+                $this->error('[CLEANUP] project_id not found in credentials.json');
+                return 1;
+            }
+            $this->info("  Project ID : {$this->projectId}");
+            $this->accessToken = $this->getAccessToken();
+            $this->http        = new HttpClient(['timeout' => 60, 'http_errors' => false]);
+        } catch (\Throwable $e) {
+            $this->error('[CLEANUP] Auth failed: ' . $e->getMessage());
+            return 1;
+        }
+
+        // ── Connectivity test (always) ────────────────────────────────
+        if (!$this->testConnectivity()) {
+            return 1;
+        }
+
+        // ── AUDIT MODE ────────────────────────────────────────────────
+        if ($audit) {
+            return $this->runAudit();
+        }
+
+        // ── Mode banner ──────────────────────────────────────────────
+        if ($this->dryRun) {
+            $this->warn('');
+            $this->warn('  ╔══════════════════════════════════════════╗');
+            $this->warn('  ║   DRY-RUN MODE — no writes will occur   ║');
+            $this->warn('  ╚══════════════════════════════════════════╝');
+            $this->warn('');
+        } else {
+            $this->warn('');
+            $this->warn('  ╔══════════════════════════════════════════════════════╗');
+            $this->warn('  ║  SOFT-LAUNCH CLEANUP — FIRESTORE DATA WILL BE LOST  ║');
+            $this->warn('  ╚══════════════════════════════════════════════════════╝');
+            $this->warn('');
+
+            if (!$force) {
+                if (!$this->confirm('  This will DELETE test users, all orders, chats, wallets. Continue?')) {
+                    $this->info('Aborted.');
+                    return 0;
+                }
+                if (!$this->confirm('  Are you absolutely sure? Type yes to confirm.')) {
+                    $this->info('Aborted.');
+                    return 0;
+                }
+            }
+        }
+
+        \Log::info('[CLEANUP_STARTED] soft-launch cleanup dry_run=' . ($this->dryRun ? 'true' : 'false'));
+        $this->info('[CLEANUP_STARTED] project=' . $this->projectId);
+
+        // ── 1. Wipe transactional collections ────────────────────────
+        foreach (self::WIPE_COLLECTIONS as $collection) {
+            $this->wipeCollection($collection);
+        }
+
+        // ── 2. Delete test user accounts ──────────────────────────────
+        $this->deleteTestUsers();
+
+        // ── 3. Clear stale dispatch fields on surviving users ─────────
+        $this->clearStaleDispatchFields();
+
+        // ── Summary ───────────────────────────────────────────────────
+        \Log::info("[CLEANUP_DONE] total_deleted={$this->totalDeleted} total_skipped={$this->totalSkipped}");
+        $this->info('');
+        $this->info('  ┌──────────────────────────────────────┐');
+        $this->info("  │  Deleted  : {$this->totalDeleted}");
+        $this->info("  │  Skipped  : {$this->totalSkipped}");
+        $this->info('  │  Status   : ' . ($this->dryRun ? 'DRY-RUN (no writes)' : 'DONE'));
+        $this->info('  └──────────────────────────────────────┘');
+
+        return 0;
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // CONNECTIVITY TEST
+    // ══════════════════════════════════════════════════════════════════
+
+    private function testConnectivity(): bool
+    {
+        $this->line('  → Testing Firestore connectivity…');
+        try {
+            $url  = "{$this->fsBaseUrl()}/settings?pageSize=1";
+            $resp = $this->http->get($url, [
+                'headers' => ['Authorization' => 'Bearer ' . $this->accessToken],
+            ]);
+            $status = $resp->getStatusCode();
+
+            if ($status === 200 || $status === 404) {
+                $body  = json_decode((string)$resp->getBody(), true) ?? [];
+                $count = count($body['documents'] ?? []);
+                $this->info("    OK — HTTP {$status}, settings visible: {$count} doc(s)");
+                return true;
+            }
+
+            $body = (string)$resp->getBody();
+            $this->error("    FAILED — HTTP {$status}: " . substr($body, 0, 300));
+            \Log::error("[CLEANUP] connectivity test failed status={$status} body={$body}");
+            return false;
+        } catch (\Throwable $e) {
+            $this->error('    FAILED — ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // AUDIT MODE — read-only diagnostic
+    // ══════════════════════════════════════════════════════════════════
+
+    private function runAudit(): int
+    {
+        $this->warn('');
+        $this->warn('  ╔══════════════════════════════════════════╗');
+        $this->warn('  ║   AUDIT MODE — read-only, no writes     ║');
+        $this->warn('  ╚══════════════════════════════════════════╝');
+        $this->warn('');
+
+        $rows = [];
+
+        foreach (self::WIPE_COLLECTIONS as $col) {
+            [$count, $sample] = $this->countCollection($col);
+            $rows[] = [
+                $col,
+                $count,
+                $count > 0 ? '→ WOULD WIPE' : 'empty',
+                $sample,
+            ];
+        }
+
+        // Users with role breakdown
+        $this->line('');
+        $this->line('  → Scanning users collection…');
+
+        $roleStats     = [];
+        $dispatchCount = 0;
+        $totalUsers    = 0;
+        $pageToken     = null;
+        $sampleStale   = [];
+
+        do {
+            [$docs, $nextToken] = $this->fsListPage('users', $pageToken);
+            if (empty($docs)) break;
+
+            foreach ($docs as $doc) {
+                $totalUsers++;
+                $data = $doc['fields'] ?? [];
+                $role = $this->strVal($data['role'] ?? null);
+                $key  = $role ?: '(no role / admin)';
+                $roleStats[$key] = ($roleStats[$key] ?? 0) + 1;
+
+                foreach (['ordercabRequestData', 'orderCabRequestData', 'orderRequestData'] as $f) {
+                    if (isset($data[$f]) && !isset($data[$f]['nullValue'])) {
+                        $dispatchCount++;
+                        if (count($sampleStale) < 5) {
+                            $sampleStale[] = $this->docId($doc['name'] ?? '') . " [{$f}]";
+                        }
+                        break;
+                    }
+                }
+            }
+            $pageToken = $nextToken;
+            usleep(100_000);
+        } while ($pageToken !== null);
+
+        $rows[] = ['users (TOTAL)', $totalUsers, '— see breakdown below —', ''];
+
+        // Print collection table
+        $this->table(['Collection', 'Docs', 'Action', 'Sample IDs (first 3)'], $rows);
+
+        // Print user role breakdown
+        $this->info('');
+        $this->line('  USER ROLE BREAKDOWN:');
+        arsort($roleStats);
+        foreach ($roleStats as $role => $cnt) {
+            $deletable = in_array($role, self::DELETABLE_ROLES, true);
+            $tag       = $deletable ? '→ WOULD DELETE' : 'PROTECTED';
+            $this->line('    ' . str_pad((string)$cnt, 5, ' ', STR_PAD_LEFT) . "  {$role}  [{$tag}]");
+        }
+
+        // Print dispatch status
+        $this->info('');
+        $this->line("  STALE DISPATCH FIELDS on users: {$dispatchCount}");
+        if (!empty($sampleStale)) {
+            foreach ($sampleStale as $s) {
+                $this->line("    • {$s}");
+            }
+        }
+
+        $this->info('');
+        $this->info('  ──────────────────────────────────────────────');
+        $this->info('  Run --dry-run to preview deletions.');
+        $this->info('  Run --force   to execute cleanup.');
+        $this->info('  ──────────────────────────────────────────────');
+
+        return 0;
+    }
+
+    private function countCollection(string $collection): array
+    {
+        $count     = 0;
+        $sampleIds = [];
+        $pageToken = null;
+
+        do {
+            [$docs, $nextToken] = $this->fsListPage($collection, $pageToken);
+            if (empty($docs)) break;
+
+            $count += count($docs);
+            foreach ($docs as $doc) {
+                if (count($sampleIds) < 3) {
+                    $sampleIds[] = $this->docId($doc['name'] ?? '');
+                }
+            }
+            $pageToken = $nextToken;
+            usleep(80_000);
+        } while ($pageToken !== null);
+
+        $this->line("    {$collection}: {$count}");
+        return [$count, implode(', ', $sampleIds)];
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // STEP 1 — Wipe a full collection
+    // ══════════════════════════════════════════════════════════════════
+
+    private function wipeCollection(string $collection): void
+    {
+        $logTag = strtoupper(str_replace(['-', ' '], '_', $collection));
+        $this->line("  → Scanning {$collection}…");
+
+        $count     = 0;
+        $pageToken = null;
+
+        do {
+            [$docs, $nextToken] = $this->fsListPage($collection, $pageToken);
+            if (empty($docs)) break;
+
+            $paths = array_column($docs, 'name');
+
+            if (!$this->dryRun) {
+                $this->batchDelete($paths);
+            }
+
+            $count     += count($paths);
+            $pageToken  = $nextToken;
+
+            usleep(200_000);
+        } while ($pageToken !== null);
+
+        $this->totalDeleted += $count;
+        $verb = $this->dryRun ? 'WOULD DELETE' : 'DELETED';
+        \Log::info("[{$logTag}_{$verb}] count={$count}");
+        $this->info("    {$verb} {$count} docs from {$collection}");
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // STEP 2 — Delete test user accounts
+    // ══════════════════════════════════════════════════════════════════
+
+    private function deleteTestUsers(): void
+    {
+        $this->line("  → Scanning users (roles: " . implode(', ', self::DELETABLE_ROLES) . ")…");
+
+        $deleted   = 0;
+        $skipped   = 0;
+        $pageToken = null;
+
+        do {
+            [$docs, $nextToken] = $this->fsListPage('users', $pageToken);
+            if (empty($docs)) break;
+
+            $toDelete = [];
+
+            foreach ($docs as $doc) {
+                $data = $doc['fields'] ?? [];
+                $role = $this->strVal($data['role'] ?? null);
+
+                if (empty($role) || !in_array($role, self::DELETABLE_ROLES, true)) {
+                    $skipped++;
+                    $this->totalSkipped++;
+                    $id = $this->docId($doc['name'] ?? '');
+                    \Log::info("[CLEANUP] SKIP user id={$id} role='{$role}'");
+                    continue;
+                }
+
+                $toDelete[] = $doc['name'];
+            }
+
+            if (!empty($toDelete) && !$this->dryRun) {
+                $this->batchDelete($toDelete);
+            }
+
+            $deleted   += count($toDelete);
+            $pageToken  = $nextToken;
+
+            usleep(200_000);
+        } while ($pageToken !== null);
+
+        $this->totalDeleted += $deleted;
+        $verb = $this->dryRun ? 'WOULD DELETE' : 'DELETED';
+        \Log::info("[TEST_USERS_{$verb}] deleted={$deleted} skipped={$skipped}");
+        $this->info("    {$verb} {$deleted} users — skipped {$skipped} protected (admin/system)");
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // STEP 3 — Clear stale dispatch fields on surviving users
+    // ══════════════════════════════════════════════════════════════════
+
+    private function clearStaleDispatchFields(): void
+    {
+        $this->line('  → Clearing stale dispatch fields on all users…');
+
+        $cleaned   = 0;
+        $pageToken = null;
+
+        do {
+            [$docs, $nextToken] = $this->fsListPage('users', $pageToken);
+            if (empty($docs)) break;
+
+            foreach ($docs as $doc) {
+                $data     = $doc['fields'] ?? [];
+                $docId    = $this->docId($doc['name'] ?? '');
+                $hasStale = false;
+
+                foreach (['ordercabRequestData', 'orderCabRequestData', 'orderRequestData'] as $field) {
+                    if (isset($data[$field]) && !isset($data[$field]['nullValue'])) {
+                        $hasStale = true;
+                        break;
+                    }
+                }
+                if (!$hasStale && isset($data['inProgressOrderID'])) {
+                    $arr = $data['inProgressOrderID']['arrayValue']['values'] ?? [];
+                    if (!empty($arr)) $hasStale = true;
+                }
+
+                if (!$hasStale) continue;
+
+                \Log::info("[STALE_DISPATCHES_CLEANED] userId={$docId}");
+                $cleaned++;
+
+                if (!$this->dryRun) {
+                    $this->fsUpdate('users', $docId, [
+                        'ordercabRequestData' => ['nullValue' => null],
+                        'orderCabRequestData' => ['nullValue' => null],
+                        'orderRequestData'    => ['arrayValue' => ['values' => []]],
+                        'inProgressOrderID'   => ['arrayValue' => ['values' => []]],
+                    ]);
+                    usleep(50_000);
+                }
+            }
+
+            $pageToken = $nextToken;
+            usleep(150_000);
+        } while ($pageToken !== null);
+
+        $verb = $this->dryRun ? 'WOULD CLEAR' : 'CLEARED';
+        \Log::info("[STALE_DISPATCHES_{$verb}] count={$cleaned}");
+        $this->info("    {$verb} stale dispatch fields on {$cleaned} users");
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // FIRESTORE HELPERS
+    // ══════════════════════════════════════════════════════════════════
+
+    private function fsBaseUrl(): string
+    {
+        return "https://firestore.googleapis.com/v1/projects/{$this->projectId}/databases/(default)/documents";
+    }
+
+    /**
+     * List one page of a collection (max 200 docs).
+     * Returns [$docs, $nextPageToken|null].
+     * Logs and surfaces ALL non-200 responses — no silent failures.
+     */
+    private function fsListPage(string $collection, ?string $pageToken): array
+    {
+        try {
+            $url = "{$this->fsBaseUrl()}/{$collection}?pageSize=200";
+            if ($pageToken) $url .= '&pageToken=' . urlencode($pageToken);
+
+            $resp   = $this->http->get($url, [
+                'headers' => ['Authorization' => 'Bearer ' . $this->accessToken],
+            ]);
+            $status = $resp->getStatusCode();
+
+            if ($status === 404) return [[], null];
+
+            if ($status !== 200) {
+                $body = (string)$resp->getBody();
+                \Log::error("[CLEANUP] fsListPage {$collection} HTTP {$status}: " . substr($body, 0, 500));
+                $this->warn("    ⚠ {$collection} → HTTP {$status}: " . substr($body, 0, 180));
+                return [[], null];
+            }
+
+            $body      = json_decode((string)$resp->getBody(), true) ?? [];
+            $docs      = $body['documents'] ?? [];
+            $nextToken = $body['nextPageToken'] ?? null;
+
+            return [$docs, $nextToken];
+        } catch (\Throwable $e) {
+            \Log::error("[CLEANUP] fsListPage {$collection}: " . $e->getMessage());
+            $this->warn("    ⚠ {$collection} exception: " . $e->getMessage());
+            return [[], null];
+        }
+    }
+
+    /**
+     * Batch-delete up to 500 document paths using Firestore batchWrite.
+     * Chunks to 200 for safety.
+     */
+    private function batchDelete(array $paths): void
+    {
+        if (empty($paths)) return;
+
+        foreach (array_chunk($paths, 200) as $chunk) {
+            try {
+                $writes = array_map(fn($p) => ['delete' => $p], $chunk);
+                $url    = "https://firestore.googleapis.com/v1/projects/{$this->projectId}/databases/(default)/documents:batchWrite";
+                $resp   = $this->http->post($url, [
+                    'headers' => [
+                        'Authorization' => 'Bearer ' . $this->accessToken,
+                        'Content-Type'  => 'application/json',
+                    ],
+                    'json' => ['writes' => $writes],
+                ]);
+
+                if ($resp->getStatusCode() !== 200) {
+                    \Log::error('[CLEANUP] batchDelete HTTP=' . $resp->getStatusCode() . ' body=' . $resp->getBody());
+                    $this->warn('    ⚠ batchDelete HTTP ' . $resp->getStatusCode());
+                }
+            } catch (\Throwable $e) {
+                \Log::error('[CLEANUP] batchDelete exception: ' . $e->getMessage());
+                $this->warn('    ⚠ batchDelete: ' . $e->getMessage());
+            }
+        }
+    }
+
+    private function fsUpdate(string $collection, string $docId, array $typedFields): void
+    {
+        if (empty($docId)) return;
+        try {
+            $mask = implode('&', array_map(
+                fn($k) => 'updateMask.fieldPaths=' . urlencode($k),
+                array_keys($typedFields)
+            ));
+            $resp = $this->http->patch(
+                "{$this->fsBaseUrl()}/{$collection}/{$docId}?{$mask}",
+                [
+                    'headers' => [
+                        'Authorization' => 'Bearer ' . $this->accessToken,
+                        'Content-Type'  => 'application/json',
+                    ],
+                    'json' => ['fields' => $typedFields],
+                ]
+            );
+            if ($resp->getStatusCode() !== 200) {
+                \Log::error("[CLEANUP] fsUpdate {$collection}/{$docId} HTTP={$resp->getStatusCode()}");
+            }
+        } catch (\Throwable $e) {
+            \Log::error("[CLEANUP] fsUpdate {$collection}/{$docId}: " . $e->getMessage());
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // VALUE HELPERS
+    // ══════════════════════════════════════════════════════════════════
+
+    private function strVal(mixed $typedVal): string
+    {
+        if (!is_array($typedVal)) return '';
+        return $typedVal['stringValue'] ?? '';
+    }
+
+    private function docId(string $name): string
+    {
+        $parts = explode('/', $name);
+        return end($parts);
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // OAUTH2
+    // ══════════════════════════════════════════════════════════════════
+
+    private function getAccessToken(): string
+    {
+        $client = new GoogleClient();
+        $client->setAuthConfig(storage_path('app/firebase/credentials.json'));
+        $client->addScope('https://www.googleapis.com/auth/cloud-platform');
+        $client->refreshTokenWithAssertion();
+        $token = $client->getAccessToken();
+        if (empty($token['access_token'])) {
+            throw new \RuntimeException('Failed to obtain Google access token');
+        }
+        return $token['access_token'];
+    }
+}

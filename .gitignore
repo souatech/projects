@@ -1,0 +1,44 @@
+# Flutter / Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+build/
+**/build/
+
+# Android
+**/.gradle/
+**/android/app/debug/
+**/android/app/profile/
+**/android/app/release/
+*.apk
+*.aab
+
+# iOS
+**/ios/Pods/
+**/ios/.symlinks/
+**/ios/Flutter/Flutter.framework
+**/ios/Flutter/App.framework
+
+# Node / Laravel
+node_modules/
+vendor/
+.env
+.env.*
+
+# Secrets / keys
+GoogleService-Info.plist
+google-services.json
+serviceAccount*.json
+firebase-adminsdk*.json
+credentials.json
+*.jks
+*.keystore
+*.p12
+*.pem
+*.key
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store

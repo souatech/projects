@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CADisableMinimumFrameDurationOnPhone</key>
+	<true/>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>CFBundleDisplayName</key>
+	<string>Joxmako</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>Joxmako</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(FLUTTER_BUILD_NAME)</string>
+	<key>CFBundleSignature</key>
+	<string>????</string>
+	<key>CFBundleVersion</key>
+	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<false/>
+		<key>UISceneConfigurations</key>
+		<dict>
+			<key>UIWindowSceneSessionRoleApplication</key>
+			<array>
+				<dict>
+					<key>UISceneClassName</key>
+					<string>UIWindowScene</string>
+					<key>UISceneConfigurationName</key>
+					<string>flutter</string>
+					<key>UISceneDelegateClassName</key>
+					<string>$(PRODUCT_MODULE_NAME).SceneDelegate</string>
+					<key>UISceneStoryboardFile</key>
+					<string>Main</string>
+				</dict>
+			</array>
+		</dict>
+	</dict>
+	<key>UIApplicationSupportsIndirectInputEvents</key>
+	<true/>
+	<key>UILaunchStoryboardName</key>
+	<string>LaunchScreen</string>
+	<key>UIMainStoryboardFile</key>
+	<string>Main</string>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Joxmako utilise votre position pour afficher les restaurants et services disponibles près de vous, calculer les frais de livraison et suivre votre commande en temps réel.</string>
+	<key>GoogleMapsAPIKey</key>
+	<string>$(GOOGLE_MAPS_API_KEY)</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Joxmako utilise votre position en continu pour vous proposer les meilleurs services de livraison et vous permettre de suivre votre livreur ou chauffeur en temps réel, même lorsque l'application est en arrière-plan.</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>Joxmako utilise votre position en arrière-plan pour que votre livreur ou chauffeur puisse vous localiser et vous rejoindre avec précision.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Joxmako utilise votre caméra pour prendre une photo de profil ou capturer des documents requis lors d'une commande ou d'une vérification d'identité.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Joxmako accède à votre galerie photos pour vous permettre de choisir une photo de profil ou d'importer des documents liés à votre compte ou à vos commandes.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Joxmako utilise votre microphone pour les communications vocales avec votre livreur ou chauffeur afin de faciliter la coordination de la livraison.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Joxmako accède au réseau local pour optimiser les performances de l'application et assurer une connexion fiable aux services de livraison et de géolocalisation.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Joxmako enregistre les reçus et confirmations de commande dans votre galerie photos.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+		<string>remote-notification</string>
+		<string>location</string>
+	</array>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+</dict>
+</plist>

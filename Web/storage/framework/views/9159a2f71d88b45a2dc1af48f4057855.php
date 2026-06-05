@@ -1,0 +1,259 @@
+<header class="section-header">
+    <?php
+    if (Session::get('takeawayOption') == 'true' || Session::get('takeawayOption') == true) {
+        $takeaway_options = true;
+    } else {
+        $takeaway_options = false;
+    }
+    ?>
+    <script>
+        <?php if ($takeaway_options) { ?>
+        var takeaway_options = true;
+        <?php } else { ?>
+        var takeaway_options = false;
+        <?php } ?>
+        function takeAwayOnOff(takeAway) {
+            var check_val;
+            if (takeaway_options == true) {
+                if (takeAway.checked == false) {
+                    let isExecuted = confirm("<?php echo e(trans('lang.take_away_select_error')); ?>");
+                    if (isExecuted) {
+                    } else {
+                        return false;
+                    }
+                }
+            }
+            if (takeAway.checked == true) {
+                check_val = true;
+                takeaway_options = true;
+            } else {
+                check_val = false;
+                takeaway_options = false;
+            }
+            $.ajax({
+                data: {
+                    takeawayOption: check_val,
+                    "_token": "<?php echo e(csrf_token()); ?>",
+                },
+                url: '/takeaway',
+                type: 'POST',
+                success: function (result) {
+                    result = $.parseJSON(result);
+                    location.reload();
+                }
+            });
+        }
+    </script>
+    <section class="header-main shadow-sm bg-white">
+        <div class="container">
+            <div class="row align-items-center">
+                <div class="col-2">
+                    <a href="<?php echo e(url('/')); ?>" class="brand-wrap mb-0">
+                        <img alt="#" class="img-fluid" src="<?php echo e(asset('img/logo_web.png')); ?>" id="logo_web">
+                    </a>
+                </div>
+                <div class="col-3 d-flex align-items-center m-none head-search">
+                    <div class="dropdown ml-4">
+                        <a class="text-dark dropdown-toggle d-flex align-items-center p-0" href="#" id="navbarDropdown"
+                           role="button" aria-haspopup="true" aria-expanded="false">
+                            <div class="head-loc" onclick="getCurrentLocation('reload')">
+                           
+                                <i class="feather-map-pin mr-2 bg-light rounded-pill p-2 icofont-size"></i>
+                            </div>
+                            <div>
+                                <input id="user_locationnew" type="text" size="50" class="pac-target-input">
+
+                            </div>
+                        </a>
+                    </div>
+                </div>
+                <div class="col-7 header-right">
+                    <div class="d-flex align-items-center justify-content-end pr-5">
+                        <?php if (@$_COOKIE['service_type'] == 'On Demand Service'){ ?>
+                        <a href="<?php echo e(route('ondemand-search')); ?>" class="widget-header mr-4 text-dark">
+                            <div class="icon d-flex align-items-center">
+                                <i class="feather-search h6 mr-2 mb-0"></i> <span><?php echo e(trans('lang.search')); ?></span>
+                            </div>
+                        </a>
+                        <?php }
+                        if (@$_COOKIE['service_type'] == 'Multivendor Delivery Service' || @$_COOKIE['service_type'] == 'Ecommerce Service'){
+                            ?>
+                        <a href="<?php echo e(route('search')); ?>" class="widget-header mr-4 text-dark">
+                            <div class="icon d-flex align-items-center">
+                                <i class="feather-search h6 mr-2 mb-0"></i> <span><?php echo e(trans('lang.search')); ?></span>
+                            </div>
+                        </a>
+                        <?php } ?>
+                        <a href="<?php echo e(route('offers')); ?>" class="widget-header mr-4 text-dark offer-link">
+                            <div class="icon d-flex align-items-center">
+                                <img alt="#" class="img-fluid mr-2" src="<?php echo e(asset('img/discount.png')); ?>">
+                                <span><?php echo e(trans('lang.offers')); ?></span>
+                            </div>
+                        </a>
+                        <?php if(auth()->guard()->check()): ?>
+                        <?php else: ?>
+                            <a href="<?php echo e(route('login')); ?>" class="widget-header mr-4 text-dark m-none">
+                                <div class="icon d-flex align-items-center">
+                                    <i class="feather-user h6 mr-2 mb-0"></i> <span><?php echo e(trans('lang.sign_in')); ?></span>
+                                </div>
+                            </a>
+                        <?php endif; ?>
+                        <div class="dropdown mr-4 m-none">
+                            <a href="#" class="dropdown-toggle text-dark py-3 d-block" id="dropdownMenuButton"
+                               data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                            </a>
+                            <div class="dropdown-menu dropdown-menu-right" aria-labelledby="dropdownMenuButton">
+                                <?php if(auth()->guard()->check()): ?>
+                                    <a class="dropdown-item" href="<?php echo e(route('profile')); ?>"><?php echo e(trans('lang.my_account')); ?></a>
+                                    <?php
+                                    if (@$_COOKIE['service_type'] == "Multivendor Delivery Service" || @$_COOKIE['service_type'] == 'Ecommerce Service') {
+                                        ?>
+                                    <a class="dropdown-item" href="<?php echo e(route('vendors')); ?>"><?php echo e(trans('lang.all_store')); ?></a>
+                                        <?php
+                                    }
+                                    if (@$_COOKIE['service_type'] == "On Demand Service") {
+                                        ?>
+                                    <a class="dropdown-item"
+                                       href="<?php echo e(route('ondemand-services')); ?>"><?php echo e(trans('lang.all_services')); ?></a>
+                                        <?php
+                                    }
+                                    ?>
+                                    <?php if(@$_COOKIE['dine_in_active'] && @$_COOKIE['dine_in_active'] == 'true'): ?>
+                                        <a class="dropdown-item dine_in_menu"
+                                           href="<?php echo e(route('vendors')); ?>?dinein=1"><?php echo e(trans('lang.dine_in_vendor')); ?></a>
+                                    <?php endif; ?>
+                                    <a class="dropdown-item"
+                                       href="<?php echo e(route('deliveryofsupport')); ?>"><?php echo e(trans('lang.delivery_support')); ?></a>
+                                    <a class="dropdown-item"
+                                       href="<?php echo e(route('contact_us')); ?>"><?php echo e(trans('lang.contact_us')); ?></a>
+                                    <a class="dropdown-item" href="<?php echo e(route('terms')); ?>"><?php echo e(trans('lang.terms_use')); ?></a>
+                                    <a class="dropdown-item"
+                                       href="<?php echo e(route('privacy')); ?>"><?php echo e(trans('lang.privacy_policy')); ?></a>
+                                    <a class="dropdown-item" href="<?php echo e(route('logout')); ?>" onclick="event.preventDefault();
+                                             document.getElementById('logout-form').submit();"><?php echo e(trans('lang.logout')); ?></a>
+                                <?php else: ?>
+                                    <?php
+                                    if (@$_COOKIE['service_type'] == "Multivendor Delivery Service" || @$_COOKIE['service_type'] == 'Ecommerce Service') {
+                                        ?>
+                                    <a class="dropdown-item" href="<?php echo e(route('vendors')); ?>"><?php echo e(trans('lang.all_store')); ?></a>
+                                        <?php
+                                    }
+                                    if (@$_COOKIE['service_type'] == "On Demand Service") {
+                                        ?>
+                                    <a class="dropdown-item"
+                                       href="<?php echo e(route('ondemand-services')); ?>"><?php echo e(trans('lang.all_services')); ?></a>
+                                        <?php
+                                    }
+                                    ?>
+                                    <?php if(@$_COOKIE['dine_in_active'] && @$_COOKIE['dine_in_active'] == 'true'): ?>
+                                        <a class="dropdown-item dine_in_menu"
+                                           href="<?php echo e(route('vendors')); ?>?dinein=1"><?php echo e(trans('lang.dine_in_vendor')); ?></a>
+                                    <?php endif; ?>
+                                    <a class="dropdown-item"
+                                       href="<?php echo e(route('deliveryofsupport')); ?>"><?php echo e(trans('lang.delivery_support')); ?></a>
+                                    <a class="dropdown-item"
+                                       href="<?php echo e(route('contact_us')); ?>"><?php echo e(trans('lang.contact_us')); ?></a>
+                                    <a class="dropdown-item" href="<?php echo e(route('terms')); ?>"><?php echo e(trans('lang.terms_use')); ?></a>
+                                    <a class="dropdown-item"
+                                       href="<?php echo e(route('privacy')); ?>"><?php echo e(trans('lang.privacy_policy')); ?></a>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                        <?php if (@$_COOKIE['service_type'] == "Multivendor Delivery Service" || @$_COOKIE['service_type'] == 'Ecommerce Service'){ ?>
+                        <a href="<?php echo e(route('checkout')); ?>" class="widget-header mr-4 text-dark">
+                            <div class="icon d-flex align-items-center">
+                                <i class="feather-shopping-cart h6 mr-2 mb-0"></i> <span><?php echo e(trans('lang.cart')); ?></span>
+                            </div>
+                        </a>
+                        <?php } ?>
+                        <?php if (@$_COOKIE['service_type'] == 'Multivendor Delivery Service') {
+                        if (Session::get('takeawayOption') == "true") { ?>
+                        <div class="icon d-flex align-items-center text-dark takeaway-div">
+                                    <span class="takeaway-btn">
+                                        <i class="fa fa-car h6 mr-1 mb-0"></i> <span> <?php echo e(trans('lang.take_away')); ?> </span>
+                                        <input type="checkbox" onclick="takeAwayOnOff(this)"
+                                               <?php if (Session::get('takeawayOption') == "true") { ?> checked <?php } ?>> <span
+                                                class="slider round"></span>
+                                    </span>
+                        </div>
+                        <?php } else { ?>
+                        <div class="icon d-flex align-items-center text-dark takeaway-div">
+                                    <span class="takeaway-btn">
+                                        <i class="fa fa-car h6 mr-1 mb-0"></i> <span> <?php echo e(trans('lang.delivery')); ?> </span>
+                                        <input type="checkbox" onclick="takeAwayOnOff(this)"> <span
+                                                class="slider round"></span>
+                                    </span>
+                        </div>
+                        <?php } ?>
+                        <?php } ?>
+                        <div style="visibility: hidden;"
+                             class="language-list icon d-flex align-items-center text-dark ml-2"
+                             id="language_dropdown_box">
+                            <div class="language-select">
+                                <i class="feather-globe"></i>
+                            </div>
+                            <div class="language-options">
+                                <select class="form-control changeLang text-dark" id="language_dropdown"></select>
+                            </div>
+                        </div>
+                        <a class="toggle" href="#">
+                            <span></span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+</header>
+<div class="d-none">
+    <div class="bg-primary p-3">
+        <a class="toggle togglew toggle-2" href="#"><span></span></a>
+        <a href="<?php echo e(url('/')); ?>" class="mobile-logo brand-wrap mb-0">
+            <img alt="#" class="img-fluid" src="<?php echo e(asset('img/logo_web.png')); ?>">
+        </a>
+
+        <!--  Start -->
+        <div class="mobile-header-loc-lang d-flex align-items-center justify-content-between pt-3">  
+            <?php if (Session::get('takeawayOption') == "true") { ?>
+                            <div class="icon d-flex align-items-center text-dark takeaway-div">
+                                            <span class="takeaway-btn">
+                                                <i class="fa fa-car h6 mr-1 mb-0"></i> <span> <?php echo e(trans('lang.take_away')); ?> </span>
+                                                <input type="checkbox" onclick="takeAwayOnOff(this)"
+                                                       <?php if (Session::get('takeawayOption') == "true") { ?> checked <?php } ?>> <span
+                                                        class="slider round"></span>
+                                                </span>
+                            </div>
+                        <?php } else { ?>
+                            <div class="icon d-flex align-items-center text-dark takeaway-div">
+                                        <span class="takeaway-btn">
+                                            <i class="fa fa-car h6 mr-1 mb-0"></i> <span> <?php echo e(trans('lang.delivery')); ?> </span>
+                                            <input type="checkbox" onclick="takeAwayOnOff(this)"> <span
+                                                    class="slider round"></span>
+                                            </span>
+                            </div>
+                        <?php } ?>
+             <div class="language-list icon d-flex align-items-center text-light w-50" id="language_dropdown_box"> 
+                <div class="language-select mr-2">
+                    <i class="feather-globe"></i>
+                </div>
+               <div class="language-options">
+                    <select class="form-control changeLang text-dark" id="language_dropdown2"></select>
+                </div>
+            </div>           
+        </div>
+        
+        <div class="mobile-set-location d-flex align-items-center head-search pt-1 mt-3">
+            <div class="dropdown">
+                <a class="text-dark dropdown-toggle d-flex align-items-center p-0" href="#" id="navbarDropdown"
+                   role="button" aria-haspopup="true" aria-expanded="false">
+                    <div class="head-loc" onclick="getCurrentLocation('reload')">
+                        <i class="feather-map-pin mr-2 bg-light rounded-pill p-2 icofont-size"></i></div>
+                    <div>
+                        <input id="user_locationnew_mobile" type="text" size="50" class="user_locationnew pac-target-input">
+                    </div>
+                </a>
+            </div>
+    </div>
+   <!--  End -->
+    </div>
+</div><?php /**PATH /home/u844577645/domains/joxmako.com/public_html/resources/views/layouts/header.blade.php ENDPATH**/ ?>
