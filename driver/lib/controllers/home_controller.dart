@@ -226,6 +226,7 @@ class HomeController extends GetxController {
         .where('status', whereNotIn: [
           Constant.orderCancelled,
           Constant.driverRejected,
+          Constant.orderCompleted,
         ])
         .where('id', isEqualTo: orderId)
         .snapshots()

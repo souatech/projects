@@ -205,6 +205,9 @@ class FireStoreUtils {
       if (userModel.orderCabRequestData == null) {
         deletes['ordercabRequestData'] = FieldValue.delete();
       }
+      if (userModel.activeDeviceId == null) {
+        deletes['activeDeviceId'] = FieldValue.delete();
+      }
       await docRef.update(deletes);
 
       if (userModel.id == getCurrentUid()) {

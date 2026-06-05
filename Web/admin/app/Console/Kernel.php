@@ -21,6 +21,7 @@ class Kernel extends ConsoleKernel
         $schedule->command('app:ondemand-order-auto-cancel')->daily();
         $schedule->command('app:cab-schedule-ride')->everyMinute()->withoutOverlapping();
         $schedule->command('app:parcel-schedule-dispatch')->everyMinute()->withoutOverlapping();
+        $schedule->command('app:vendor-schedule-dispatch')->everyMinute()->withoutOverlapping();
     }
     /**
      * Register the commands for the application.

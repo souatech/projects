@@ -30,27 +30,42 @@ class VendorScheduleDispatch extends Command
 
     public function dispatchVendorOrderById(string $orderId): bool
     {
-        \Log::info("[VENDOR_DISPATCH_HTTP_STARTED] orderId=$orderId");
-        \Log::info("[DISPATCH_START] service=vendor orderId=$orderId");
+        \Log::info("[VENDOR_DISPATCH_DEBUG] step=received orderId=$orderId");
 
         try {
             $this->bootstrapFirestore();
+
+            // step=fetch_order
             $order = $this->fsGet('vendor_orders', $orderId);
             if (empty($order)) {
-                \Log::warning("[VENDOR_DISPATCH_HTTP_SKIP] orderId=$orderId not found");
+                \Log::warning("[VENDOR_DISPATCH_DEBUG] step=order_not_found orderId=$orderId");
+                \Log::warning("[VENDOR_DISPATCH_RESULT] success=false reason=order_not_found orderId=$orderId");
                 return false;
             }
 
-            $status = (string)($order['status'] ?? '');
-            \Log::info("[ORDER_LOADED] service=vendor orderId=$orderId status=$status sectionId=" . ($order['section_id'] ?? $order['sectionId'] ?? ''));
+            $status    = (string)($order['status']    ?? '');
+            $sectionId = (string)($order['section_id'] ?? $order['sectionId'] ?? '');
+            $vendorId  = (string)($order['vendorID']   ?? $order['vendorId']  ?? '');
+            $vendor    = $order['vendor'] ?? [];
+            $pickupLat = (float)($vendor['latitude']  ?? $vendor['location']['latitude']  ?? 0);
+            $pickupLng = (float)($vendor['longitude'] ?? $vendor['location']['longitude'] ?? 0);
+            $dropLat   = (float)($order['dropLat']    ?? $order['drop_lat']   ?? 0);
+            $dropLng   = (float)($order['dropLng']    ?? $order['drop_lng']   ?? 0);
+
+            \Log::info("[VENDOR_DISPATCH_DEBUG] step=order_loaded orderId=$orderId status=$status sectionId=$sectionId vendorId=$vendorId pickupLat=$pickupLat pickupLng=$pickupLng dropLat=$dropLat dropLng=$dropLng");
+
             if (!in_array($status, ['Order Accepted', 'Driver Rejected'], true)) {
-                \Log::info("[VENDOR_DISPATCH_HTTP_SKIP] orderId=$orderId status=$status not dispatchable");
+                \Log::info("[VENDOR_DISPATCH_DEBUG] step=status_not_dispatchable orderId=$orderId status=$status allowed=[Order Accepted,Driver Rejected]");
+                \Log::info("[VENDOR_DISPATCH_RESULT] success=false reason=status_not_dispatchable orderId=$orderId status=$status");
                 return false;
             }
 
+            \Log::info("[VENDOR_DISPATCH_DEBUG] step=status_ok orderId=$orderId status=$status — entering dispatchOrder");
             return $this->dispatchOrder($order);
+
         } catch (\Throwable $e) {
-            \Log::error("[VENDOR_DISPATCH_HTTP_ERROR] orderId=$orderId message=" . $e->getMessage());
+            \Log::error("[VENDOR_DISPATCH_DEBUG] step=exception orderId=$orderId message=" . $e->getMessage());
+            \Log::error("[VENDOR_DISPATCH_RESULT] success=false reason=exception orderId=$orderId message=" . $e->getMessage());
             return false;
         }
     }
@@ -69,14 +84,15 @@ class VendorScheduleDispatch extends Command
 
     private function dispatchOrder(array $order): bool
     {
-        $orderId = (string)($order['id'] ?? $order['__docId'] ?? '');
+        $orderId   = (string)($order['id']         ?? $order['__docId'] ?? '');
         $sectionId = (string)($order['section_id'] ?? $order['sectionId'] ?? '');
-        $rejected = (array)($order['rejectedByDrivers'] ?? []);
+        $rejected  = (array)($order['rejectedByDrivers'] ?? []);
 
-        \Log::info("[DISPATCH_START] service=vendor orderId=$orderId status=" . ($order['status'] ?? '') . " sectionId=$sectionId");
+        \Log::info("[VENDOR_DISPATCH_DEBUG] step=dispatch_order_start orderId=$orderId status=" . ($order['status'] ?? '') . " sectionId=$sectionId rejectedCount=" . count($rejected));
 
         if ($orderId === '') {
-            \Log::warning('[VENDOR_DISPATCH_SKIP] missing order id');
+            \Log::warning("[VENDOR_DISPATCH_DEBUG] step=missing_order_id");
+            \Log::warning("[VENDOR_DISPATCH_RESULT] success=false reason=missing_order_id");
             return false;
         }
 
@@ -84,16 +100,19 @@ class VendorScheduleDispatch extends Command
             ['field' => 'role', 'op' => 'EQUAL', 'value' => ['stringValue' => 'driver']],
         ]);
 
+        \Log::info("[VENDOR_DISPATCH_DEBUG] step=drivers_loaded total=" . count($allDriverDocs) . " orderId=$orderId");
+
         $candidates = [];
         foreach ($allDriverDocs as $driver) {
             $driverId = (string)($driver['id'] ?? $driver['__docId'] ?? '');
             if ($driverId === '') continue;
 
-            $active = ($driver['active'] ?? true) === true;
-            $isActive = ($driver['isActive'] ?? false) === true;
-            $role = (string)($driver['driverRole'] ?? '');
-            $serviceTypes = (array)($driver['serviceTypes'] ?? []);
-            $legacyType = (string)($driver['serviceType'] ?? '');
+            $active       = ($driver['active']   ?? true)  === true;
+            $isActive     = ($driver['isActive']  ?? false) === true;
+            $role         = (string)($driver['driverRole']   ?? '');
+            $serviceTypes = (array)($driver['serviceTypes']  ?? []);
+            $legacyType   = (string)($driver['serviceType']  ?? '');
+            $fcmToken     = (string)($driver['fcmToken']     ?? '');
 
             $deliveryLike = $role === 'delivery'
                 || in_array('delivery-service', $serviceTypes, true)
@@ -103,7 +122,8 @@ class VendorScheduleDispatch extends Command
                 || in_array($legacyType, ['delivery-service', 'multivendor-delivery-service', 'parcel-service', 'parcel_delivery'], true);
 
             if (!$active || !$isActive || !$deliveryLike) {
-                \Log::info("[DISPATCH_DRIVER_SKIP] driverId=$driverId active=$active isActive=$isActive role=$role deliveryLike=$deliveryLike");
+                $reason = !$active ? 'active=false' : (!$isActive ? 'isActive=false' : 'not_delivery_type');
+                \Log::info("[VENDOR_DISPATCH_DRIVER_SKIP] driverId=$driverId reason=$reason active=$active isActive=$isActive driverRole=$role serviceTypes=" . implode(',', $serviceTypes) . " legacyType=$legacyType");
                 continue;
             }
 
@@ -112,28 +132,29 @@ class VendorScheduleDispatch extends Command
                 $sectionIds = [(string)$driver['sectionId']];
             }
             if ($sectionId !== '' && !empty($sectionIds) && !in_array($sectionId, $sectionIds, true)) {
-                \Log::info("[DISPATCH_DRIVER_SKIP_SECTION] driverId=$driverId sections=" . implode(',', $sectionIds) . " orderSection=$sectionId");
+                \Log::info("[VENDOR_DISPATCH_DRIVER_SKIP] driverId=$driverId reason=section_mismatch driverSections=" . implode(',', $sectionIds) . " orderSection=$sectionId");
                 continue;
             }
 
             if (in_array($driverId, $rejected, true)) {
-                \Log::info("[DISPATCH_DRIVER_SKIP_REJECTED] driverId=$driverId orderId=$orderId");
+                \Log::info("[VENDOR_DISPATCH_DRIVER_SKIP] driverId=$driverId reason=in_rejectedByDrivers orderId=$orderId");
                 continue;
             }
 
             $requests = (array)($driver['orderRequestData'] ?? []);
             if (in_array($orderId, $requests, true)) {
-                \Log::info("[DISPATCH_DRIVER_SKIP_ALREADY_REQUESTED] driverId=$driverId orderId=$orderId");
+                \Log::info("[VENDOR_DISPATCH_DRIVER_SKIP] driverId=$driverId reason=already_in_orderRequestData orderId=$orderId");
                 continue;
             }
             if (!empty($driver['ordercabRequestData']) || !empty($driver['orderParcelRequestData'])) {
-                \Log::info("[DISPATCH_DRIVER_SKIP_BUSY_OTHER_FLOW] driverId=$driverId orderId=$orderId");
+                $busyWith = !empty($driver['ordercabRequestData']) ? 'ordercabRequestData' : 'orderParcelRequestData';
+                \Log::info("[VENDOR_DISPATCH_DRIVER_SKIP] driverId=$driverId reason=busy_other_flow busyWith=$busyWith orderId=$orderId");
                 continue;
             }
 
             $distance = $this->distanceToPickup($driver, $order);
             $candidates[] = ['driver' => $driver, 'distance' => $distance];
-            \Log::info("[DISPATCH_DRIVER_CANDIDATE] driverId=$driverId distance=" . ($distance === null ? 'unknown' : round($distance, 2)) . " sectionMatch=1");
+            \Log::info("[VENDOR_DISPATCH_DEBUG] step=driver_candidate driverId=$driverId distance=" . ($distance === null ? 'unknown' : round($distance, 2)) . " fcmToken=" . ($fcmToken !== '' ? substr($fcmToken, 0, 10) . '…' : 'MISSING') . " orderId=$orderId");
         }
 
         usort($candidates, function ($a, $b) {
@@ -143,9 +164,9 @@ class VendorScheduleDispatch extends Command
             return $a['distance'] <=> $b['distance'];
         });
 
-        \Log::info("[DISPATCH_FIND_DRIVERS] role=delivery count=" . count($candidates) . " orderId=$orderId");
+        \Log::info("[VENDOR_DISPATCH_DEBUG] step=candidates_sorted count=" . count($candidates) . " orderId=$orderId");
         if (empty($candidates)) {
-            \Log::info("[DRIVER_FOUND] service=vendor orderId=$orderId driverId=none");
+            \Log::info("[VENDOR_DISPATCH_RESULT] success=false reason=no_eligible_driver orderId=$orderId sectionId=$sectionId totalDrivers=" . count($allDriverDocs));
             return false;
         }
 
@@ -175,8 +196,7 @@ class VendorScheduleDispatch extends Command
             $this->sendFcm($token, 'Nouvelle livraison', 'Une nouvelle commande est disponible.', $orderId, $driverId);
         }
 
-        \Log::info("[VENDOR_DISPATCH_DONE] orderId=$orderId driverId=$driverId");
-        \Log::info("[DISPATCH_SUCCESS] service=vendor orderId=$orderId driverId=$driverId firestoreWrite=" . ($writeOk ? '1' : '0'));
+        \Log::info("[VENDOR_DISPATCH_RESULT] success=" . ($writeOk ? 'true' : 'false') . " reason=" . ($writeOk ? 'driver_assigned' : 'firestore_write_failed') . " orderId=$orderId driverId=$driverId firestoreWrite=" . ($writeOk ? '1' : '0'));
         return $writeOk;
     }
 

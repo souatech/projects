@@ -780,6 +780,7 @@ class DrawerView extends StatelessWidget {
                                 positiveClick: () async {
                                   await AudioPlayerService.playSound(false);
                                   Constant.userModel!.fcmToken = "";
+                                  Constant.userModel!.activeDeviceId = null;
                                   await FireStoreUtils.updateUser(
                                       Constant.userModel!);
                                   await FirebaseAuth.instance.signOut();
