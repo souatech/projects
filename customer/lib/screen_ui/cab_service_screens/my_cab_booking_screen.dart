@@ -159,6 +159,11 @@ class MyCabBookingScreen extends StatelessWidget {
                               itemCount: orders.length,
                               itemBuilder: (context, index) {
                                 CabOrderModel order = orders[index];
+                                final ts =
+                                    order.scheduleDateTime ?? order.createdAt;
+                                final bookingDateLabel = ts != null
+                                    ? "${'Booking Date:'.tr} ${controller.formatDate(ts)}"
+                                    : 'Booking Date:'.tr;
                                 return GestureDetector(
                                   onTap: () {
                                     Get.to(
@@ -187,8 +192,7 @@ class MyCabBookingScreen extends StatelessWidget {
                                           CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                          "${'Booking Date:'.tr} ${controller.formatDate(order.scheduleDateTime!)}"
-                                              .tr,
+                                          bookingDateLabel,
                                           textAlign: TextAlign.start,
                                           style: TextStyle(
                                             fontFamily: AppThemeData.semiBold,

@@ -991,6 +991,8 @@ const Map<String, String> enUS = {
   'Rechercher un plat, un restaurant...': 'Search for a dish or restaurant...',
   'Tout': 'All',
   'Restaurants sponsorisés': 'Sponsored restaurants',
+  'Sponsorisés': 'Sponsored',
+  'Magasins & épiceries proches de chez vous': 'Grocery stores near you',
   'Restaurants populaires': 'Popular restaurants',
   'Frais de livraison': 'Delivery fee',
   'GRATUIT': 'FREE',

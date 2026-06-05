@@ -277,7 +277,9 @@ class FireStoreUtils {
       QueryDocumentSnapshot<Map<String, dynamic>> document,
     ) {
       try {
-        sections.add(SectionModel.fromJson(document.data()));
+        final data = Map<String, dynamic>.from(document.data());
+        data['id'] ??= document.id;
+        sections.add(SectionModel.fromJson(data));
       } catch (e) {
         print('**-FireStoreUtils.getSection Parse error $e');
       }

@@ -125,10 +125,22 @@ class ParcelOrderDetailsController extends GetxController {
   }
 
   Future<void> cancelParcelOrder() async {
-    if (!_canCancelParcel(parcelOrder.value.status)) {
-      ShowToastDialog.showToast("You can only cancel before pickup.".tr);
+    final orderId = (parcelOrder.value.id ?? '').trim();
+    if (orderId.isEmpty) {
+      ShowToastDialog.showToast("Cette livraison ne peut plus être annulée.".tr);
       return;
     }
+
+    // Fetch live status from Firestore — the local object may be stale
+    ShowToastDialog.showLoader("Vérification en cours...".tr);
+    final liveOrder = await FireStoreUtils.getParcelOrder(orderId);
+    ShowToastDialog.closeLoader();
+
+    if (liveOrder == null || !_canCancelParcel(liveOrder.status)) {
+      ShowToastDialog.showToast("Cette livraison ne peut plus être annulée.".tr);
+      return;
+    }
+
     ShowToastDialog.showLoader("Cancelling order...".tr);
     parcelOrder.value.status = Constant.orderCancelled;
     if (parcelOrder.value.paymentMethod?.toLowerCase() != "cod") {

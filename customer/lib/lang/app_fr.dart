@@ -1020,6 +1020,8 @@ const Map<String, String> frFR = {
       'Rechercher un plat, un restaurant...',
   'Tout': 'Tout',
   'Restaurants sponsorisés': 'Restaurants sponsorisés',
+  'Sponsorisés': 'Sponsorisés',
+  'Magasins & épiceries proches de chez vous': 'Magasins & épiceries proches de chez vous',
   'Restaurants populaires': 'Restaurants populaires',
   'Frais de livraison': 'Frais de livraison',
   'GRATUIT': 'GRATUIT',

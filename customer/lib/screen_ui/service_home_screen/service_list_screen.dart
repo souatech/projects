@@ -26,8 +26,12 @@ import 'package:get/get.dart';
 import '../../controllers/service_list_controller.dart';
 import '../../controllers/theme_controller.dart';
 import '../../themes/app_them_data.dart';
+import '../../models/rental_order_model.dart';
+import '../../models/vendor_model.dart';
 import '../../utils/network_image_widget.dart';
+import '../../utils/service_section_router.dart';
 import '../../utils/utils.dart';
+import '../multi_vendor_service/restaurant_details_screen/restaurant_details_screen.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ROOT
@@ -157,6 +161,20 @@ class _ServiceHomeBody extends StatelessWidget {
                 child: _EmptyServicesState(isDark: isDark),
               )
             else ...[
+              // 3. Banner admin
+              SliverToBoxAdapter(
+                child: _AdminBanner(banners: banners, isDark: isDark),
+              ),
+              // 4. Services actifs
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 4, 24, 0),
+                  child: _SectionTitle(
+                    title: 'Nos services'.tr,
+                    isDark: isDark,
+                  ),
+                ),
+              ),
               SliverToBoxAdapter(
                 child: _ServicesRail(
                   sections: sections,
@@ -164,21 +182,17 @@ class _ServiceHomeBody extends StatelessWidget {
                   onTap: (s) => controller.onServiceTap(context, s),
                 ),
               ),
-              // 3. Banner admin
-              SliverToBoxAdapter(
-                child: _AdminBanner(banners: banners, isDark: isDark),
-              ),
-              // 4. Parrainage
+              // 5. Parrainage
               SliverToBoxAdapter(
                 child: _ReferralSection(sections: sections, isDark: isDark),
               ),
-              // 5+6. Catégories Food + Restaurants recommandés
+              // 6. Catégories Food + Restaurants
               SliverToBoxAdapter(
                 child: _ServiceSection(
                   sections: sections,
                   serviceTypeFlag: 'delivery-service',
                   categoriesLabel: 'Catégories Food'.tr,
-                  vendorsLabel: 'Restaurants recommandés'.tr,
+                  vendorsLabel: 'Restaurants près de vous'.tr,
                   isDark: isDark,
                   onViewAll: () {
                     final s = _findSection(sections, 'delivery-service');
@@ -186,13 +200,13 @@ class _ServiceHomeBody extends StatelessWidget {
                   },
                 ),
               ),
-              // 7+8. Catégories Grocery + Épiceries recommandées
+              // 7. Catégories Grocery + Épiceries
               SliverToBoxAdapter(
                 child: _ServiceSection(
                   sections: sections,
                   serviceTypeFlag: 'ecommerce-service',
                   categoriesLabel: 'Catégories Épicerie'.tr,
-                  vendorsLabel: 'Épiceries recommandées'.tr,
+                  vendorsLabel: 'Magasins & épiceries proches de chez vous'.tr,
                   isDark: isDark,
                   onViewAll: () {
                     final s = _findSection(sections, 'ecommerce-service');
@@ -200,16 +214,24 @@ class _ServiceHomeBody extends StatelessWidget {
                   },
                 ),
               ),
-              // 9. Derniers colis
+              // 8. Derniers colis
               SliverToBoxAdapter(
                 child: _RecentParcelsSection(
                   isDark: isDark,
                   onViewAll: () => onSelectTab(2),
                 ),
               ),
-              // 10. Derniers trajets
+              // 9. Derniers trajets cab
               SliverToBoxAdapter(
                 child: _RecentRidesSection(
+                  isDark: isDark,
+                  onViewAll: () => onSelectTab(2),
+                ),
+              ),
+              // 10. Rental si actif
+              SliverToBoxAdapter(
+                child: _RecentRentalSection(
+                  sections: sections,
                   isDark: isDark,
                   onViewAll: () => onSelectTab(2),
                 ),
@@ -223,7 +245,7 @@ class _ServiceHomeBody extends StatelessWidget {
               ),
               // 12. Sponsors actifs
               SliverToBoxAdapter(
-                child: _SponsorsSection(isDark: isDark),
+                child: _SponsorsSection(sections: sections, isDark: isDark),
               ),
               SliverToBoxAdapter(
                 child: SizedBox(
@@ -805,7 +827,7 @@ class _ReferralSection extends StatelessWidget {
 
 class _ServiceSectionData {
   final List<VendorCategoryModel> categories;
-  final List<Map<String, dynamic>> vendors;
+  final List<VendorModel> vendors;
 
   _ServiceSectionData({required this.categories, required this.vendors});
 }
@@ -842,6 +864,20 @@ class _ServiceSectionState extends State<_ServiceSection> {
     _future = _load();
   }
 
+  @override
+  void didUpdateWidget(covariant _ServiceSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.sections != widget.sections) {
+      final found = _findSection(widget.sections, widget.serviceTypeFlag);
+      if (found?.id != _section?.id) {
+        setState(() {
+          _section = found;
+          _future = _load();
+        });
+      }
+    }
+  }
+
   Future<_ServiceSectionData> _load() async {
     final id = (_section?.id ?? '').trim();
     if (id.isEmpty) {
@@ -853,7 +889,7 @@ class _ServiceSectionState extends State<_ServiceSection> {
     ]);
     return _ServiceSectionData(
       categories: results[0] as List<VendorCategoryModel>,
-      vendors: results[1] as List<Map<String, dynamic>>,
+      vendors: results[1] as List<VendorModel>,
     );
   }
 
@@ -874,7 +910,7 @@ class _ServiceSectionState extends State<_ServiceSection> {
     }
   }
 
-  Future<List<Map<String, dynamic>>> _loadVendors(String sectionId) async {
+  Future<List<VendorModel>> _loadVendors(String sectionId) async {
     try {
       final snap = await FireStoreUtils.fireStore
           .collection(CollectionName.vendors)
@@ -882,8 +918,15 @@ class _ServiceSectionState extends State<_ServiceSection> {
           .limit(7)
           .get();
       return snap.docs
-          .map((d) => d.data())
-          .where((v) => (v['title']?.toString() ?? '').trim().isNotEmpty)
+          .map((d) {
+            try {
+              return VendorModel.fromJson(d.data());
+            } catch (_) {
+              return null;
+            }
+          })
+          .whereType<VendorModel>()
+          .where((v) => (v.title ?? '').trim().isNotEmpty)
           .take(5)
           .toList();
     } catch (_) {
@@ -929,6 +972,7 @@ class _ServiceSectionState extends State<_ServiceSection> {
                     itemBuilder: (_, i) => _CategoryChip(
                       category: data.categories[i],
                       isDark: widget.isDark,
+                      onTap: widget.onViewAll,
                     ),
                   ),
                 ),
@@ -954,6 +998,7 @@ class _ServiceSectionState extends State<_ServiceSection> {
                     separatorBuilder: (_, si) => const SizedBox(width: 14),
                     itemBuilder: (_, i) => _VendorCard(
                       vendor: data.vendors[i],
+                      section: _section,
                       isDark: widget.isDark,
                     ),
                   ),
@@ -970,16 +1015,24 @@ class _ServiceSectionState extends State<_ServiceSection> {
 class _CategoryChip extends StatelessWidget {
   final VendorCategoryModel category;
   final bool isDark;
+  final VoidCallback? onTap;
 
-  const _CategoryChip({required this.category, required this.isDark});
+  const _CategoryChip({
+    required this.category,
+    required this.isDark,
+    this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
     final String photo = category.photo ?? '';
     final String title = category.title ?? '';
-    return SizedBox(
-      width: 72,
-      child: Column(
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: SizedBox(
+        width: 72,
+        child: Column(
         children: [
           Container(
             width: 58,
@@ -1028,34 +1081,50 @@ class _CategoryChip extends StatelessWidget {
             ).copyWith(height: 1.2),
           ),
         ],
+        ),
       ),
     );
   }
 }
 
 class _VendorCard extends StatelessWidget {
-  final Map<String, dynamic> vendor;
+  final VendorModel vendor;
+  final SectionModel? section;
   final bool isDark;
 
-  const _VendorCard({required this.vendor, required this.isDark});
+  const _VendorCard({
+    required this.vendor,
+    required this.isDark,
+    this.section,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final String photo = vendor['photo']?.toString() ?? '';
-    final String title = vendor['title']?.toString() ?? '';
-    final num reviewsCount = (vendor['reviewsCount'] ?? 0) as num;
-    final num reviewsSum = (vendor['reviewsSum'] ?? 0) as num;
+    final String photo = vendor.photo ?? '';
+    final String title = vendor.title ?? '';
+    final num reviewsCount = vendor.reviewsCount ?? 0;
+    final num reviewsSum = vendor.reviewsSum ?? 0;
     final double rating =
         reviewsCount > 0 ? reviewsSum / reviewsCount : 0.0;
+    final String? distText = _vendorDistanceText(vendor);
 
-    return Container(
-      width: 178,
-      decoration: BoxDecoration(
-        color: isDark ? AppThemeData.grey800 : Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [_smallShadow(isDark)],
-      ),
-      clipBehavior: Clip.antiAlias,
+    return InkWell(
+      onTap: () {
+        if (section != null) Constant.sectionConstantModel = section;
+        Get.to(
+          const RestaurantDetailsScreen(),
+          arguments: {'vendorModel': vendor},
+        );
+      },
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        width: 178,
+        decoration: BoxDecoration(
+          color: isDark ? AppThemeData.grey800 : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [_smallShadow(isDark)],
+        ),
+        clipBehavior: Clip.antiAlias,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1098,29 +1167,55 @@ class _VendorCard extends StatelessWidget {
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
-            child: rating > 0
-                ? Row(
+            child: (rating <= 0 && distText == null)
+                ? const SizedBox.shrink()
+                : Row(
                     children: [
-                      const Icon(
-                        Icons.star_rounded,
-                        color: Color(0xFFFFA726),
-                        size: 14,
-                      ),
-                      const SizedBox(width: 3),
-                      Text(
-                        rating.toStringAsFixed(1),
-                        style: AppThemeData.mediumTextStyle(
-                          fontSize: 12,
+                      if (rating > 0) ...[
+                        const Icon(
+                          Icons.star_rounded,
+                          color: Color(0xFFFFA726),
+                          size: 14,
+                        ),
+                        const SizedBox(width: 3),
+                        Text(
+                          rating.toStringAsFixed(1),
+                          style: AppThemeData.mediumTextStyle(
+                            fontSize: 12,
+                            color: isDark
+                                ? AppThemeData.grey200
+                                : AppThemeData.grey600,
+                          ),
+                        ),
+                        if (distText != null) const SizedBox(width: 8),
+                      ],
+                      if (distText != null) ...[
+                        Icon(
+                          Icons.location_on_outlined,
+                          size: 13,
                           color: isDark
                               ? AppThemeData.grey200
                               : AppThemeData.grey600,
                         ),
-                      ),
+                        const SizedBox(width: 2),
+                        Flexible(
+                          child: Text(
+                            distText,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppThemeData.mediumTextStyle(
+                              fontSize: 11,
+                              color: isDark
+                                  ? AppThemeData.grey200
+                                  : AppThemeData.grey600,
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
-                  )
-                : const SizedBox.shrink(),
+                  ),
           ),
         ],
+        ),
       ),
     );
   }
@@ -1475,6 +1570,109 @@ class _StatusBadge extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// 10. DERNIÈRES LOCATIONS (RENTAL)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _RecentRentalSection extends StatefulWidget {
+  final List<SectionModel> sections;
+  final bool isDark;
+  final VoidCallback onViewAll;
+
+  const _RecentRentalSection({
+    required this.sections,
+    required this.isDark,
+    required this.onViewAll,
+  });
+
+  @override
+  State<_RecentRentalSection> createState() => _RecentRentalSectionState();
+}
+
+class _RecentRentalSectionState extends State<_RecentRentalSection> {
+  late final Future<List<RentalOrderModel>> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    final hasRental =
+        widget.sections.any((s) => s.serviceTypeFlag == 'rental-service' && s.isActive == true);
+    _future = hasRental ? _load() : Future.value([]);
+  }
+
+  Future<List<RentalOrderModel>> _load() async {
+    final uid = FireStoreUtils.getCurrentUid();
+    if (uid.isEmpty) return [];
+    try {
+      final snap = await FireStoreUtils.fireStore
+          .collection(CollectionName.rentalOrders)
+          .where('authorID', isEqualTo: uid)
+          .limit(5)
+          .get();
+      final orders = snap.docs
+          .map((d) {
+            try {
+              return RentalOrderModel.fromJson(d.data());
+            } catch (_) {
+              return null;
+            }
+          })
+          .whereType<RentalOrderModel>()
+          .toList();
+      orders.sort((a, b) {
+        final at = a.createdAt ?? Timestamp.fromMillisecondsSinceEpoch(0);
+        final bt = b.createdAt ?? Timestamp.fromMillisecondsSinceEpoch(0);
+        return bt.compareTo(at);
+      });
+      return orders.take(3).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<RentalOrderModel>>(
+      future: _future,
+      builder: (context, snap) {
+        final orders = snap.data ?? [];
+        if (orders.isEmpty) return const SizedBox.shrink();
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _TitleWithAction(
+                title: 'Dernières locations'.tr,
+                isDark: widget.isDark,
+                onTap: widget.onViewAll,
+              ),
+              const SizedBox(height: 12),
+              ...orders.map(
+                (o) => _OrderRow(
+                  icon: Icons.directions_car_rounded,
+                  title: (o.vehicleTypeName ?? '').trim().isNotEmpty
+                      ? o.vehicleTypeName!
+                      : 'Location'.tr,
+                  subtitle: _joinRoute(
+                    o.sourceLocationName,
+                    o.dropoffLocationName,
+                    fallback: 'Réservation véhicule'.tr,
+                  ),
+                  status: o.status ?? '',
+                  createdAt: o.createdAt,
+                  isDark: widget.isDark,
+                  onTap: () => TrackingNavigation.openRental(order: o),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // 11. PROMOTIONS ACTIVES
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -1553,8 +1751,11 @@ class _ActivePromosSectionState extends State<_ActivePromosSection> {
                   scrollDirection: Axis.horizontal,
                   itemCount: promos.length,
                   separatorBuilder: (_, si) => const SizedBox(width: 12),
-                  itemBuilder: (_, i) =>
-                      _PromoCard(promo: promos[i], isDark: widget.isDark),
+                  itemBuilder: (_, i) => _PromoCard(
+                    promo: promos[i],
+                    sections: widget.sections,
+                    isDark: widget.isDark,
+                  ),
                 ),
               ),
             ],
@@ -1567,9 +1768,37 @@ class _ActivePromosSectionState extends State<_ActivePromosSection> {
 
 class _PromoCard extends StatelessWidget {
   final CouponModel promo;
+  final List<SectionModel> sections;
   final bool isDark;
 
-  const _PromoCard({required this.promo, required this.isDark});
+  const _PromoCard({
+    required this.promo,
+    required this.sections,
+    required this.isDark,
+  });
+
+  Future<void> _open() async {
+    final vid = (promo.vendorID ?? '').trim();
+    if (vid.isNotEmpty) {
+      final vendor = await FireStoreUtils.getVendorById(vid);
+      if (vendor == null) return;
+      final section = _findSectionById(sections, vendor.sectionId);
+      if (section != null) Constant.sectionConstantModel = section;
+      Get.to(
+        const RestaurantDetailsScreen(),
+        arguments: {'vendorModel': vendor},
+      );
+      return;
+    }
+    final sid = (promo.sectionId ?? '').trim();
+    if (sid.isNotEmpty) {
+      final section = _findSectionById(sections, sid);
+      if (section != null) {
+        Constant.sectionConstantModel = section;
+        await ServiceSectionRouter.open(section);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1580,17 +1809,18 @@ class _PromoCard extends StatelessWidget {
         (promo.discountType ?? '').toLowerCase().contains('percent');
     final String discountLabel = isPercent ? '$discount%' : discount;
     final String description = promo.description ?? '';
+    final bool hasDestination =
+        (promo.vendorID ?? '').trim().isNotEmpty ||
+        (promo.sectionId ?? '').trim().isNotEmpty;
 
-    return Container(
+    final card = Container(
       width: 220,
       padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
         color: isDark ? AppThemeData.grey800 : const Color(0xFFFFF4EF),
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: isDark
-              ? AppThemeData.grey700
-              : const Color(0xFFFFD4C2),
+          color: isDark ? AppThemeData.grey700 : const Color(0xFFFFD4C2),
         ),
         boxShadow: [_microShadow(isDark)],
       ),
@@ -1663,6 +1893,13 @@ class _PromoCard extends StatelessWidget {
         ],
       ),
     );
+
+    if (!hasDestination) return card;
+    return InkWell(
+      borderRadius: BorderRadius.circular(18),
+      onTap: _open,
+      child: card,
+    );
   }
 }
 
@@ -1670,17 +1907,24 @@ class _PromoCard extends StatelessWidget {
 // 12. SPONSORS ACTIFS
 // ─────────────────────────────────────────────────────────────────────────────
 
+class _SponsorEntry {
+  final AdvertisementModel ad;
+  final VendorModel? vendor;
+  _SponsorEntry({required this.ad, this.vendor});
+}
+
 class _SponsorsSection extends StatefulWidget {
+  final List<SectionModel> sections;
   final bool isDark;
 
-  const _SponsorsSection({required this.isDark});
+  const _SponsorsSection({required this.sections, required this.isDark});
 
   @override
   State<_SponsorsSection> createState() => _SponsorsSectionState();
 }
 
 class _SponsorsSectionState extends State<_SponsorsSection> {
-  late final Future<List<AdvertisementModel>> _future;
+  late final Future<List<_SponsorEntry>> _future;
 
   @override
   void initState() {
@@ -1688,9 +1932,23 @@ class _SponsorsSectionState extends State<_SponsorsSection> {
     _future = _load();
   }
 
-  Future<List<AdvertisementModel>> _load() async {
+  Future<List<_SponsorEntry>> _load() async {
     try {
-      return await FireStoreUtils.getAllAdvertisement();
+      final ads = await FireStoreUtils.getAllAdvertisement();
+      if (ads.isEmpty) return [];
+      final entries = await Future.wait(ads.map((ad) async {
+        final vid = (ad.vendorId ?? '').trim();
+        if (vid.isEmpty) return _SponsorEntry(ad: ad);
+        final vendor = await FireStoreUtils.getVendorById(vid);
+        if (vendor == null) return null;
+        final vendorSection =
+            _findSectionById(widget.sections, vendor.sectionId);
+        if (vendorSection == null || vendorSection.isActive != true) {
+          return null;
+        }
+        return _SponsorEntry(ad: ad, vendor: vendor);
+      }));
+      return entries.whereType<_SponsorEntry>().toList();
     } catch (_) {
       return [];
     }
@@ -1698,11 +1956,11 @@ class _SponsorsSectionState extends State<_SponsorsSection> {
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<AdvertisementModel>>(
+    return FutureBuilder<List<_SponsorEntry>>(
       future: _future,
       builder: (context, snap) {
-        final ads = snap.data ?? [];
-        if (ads.isEmpty) return const SizedBox.shrink();
+        final entries = snap.data ?? [];
+        if (entries.isEmpty) return const SizedBox.shrink();
         return Padding(
           padding: const EdgeInsets.only(bottom: 24),
           child: Column(
@@ -1711,7 +1969,7 @@ class _SponsorsSectionState extends State<_SponsorsSection> {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
                 child: _SectionTitle(
-                  title: 'Sponsors'.tr,
+                  title: 'Sponsorisés'.tr,
                   isDark: widget.isDark,
                 ),
               ),
@@ -1721,10 +1979,13 @@ class _SponsorsSectionState extends State<_SponsorsSection> {
                 child: ListView.separated(
                   padding: const EdgeInsets.symmetric(horizontal: 24),
                   scrollDirection: Axis.horizontal,
-                  itemCount: ads.length,
+                  itemCount: entries.length,
                   separatorBuilder: (_, si) => const SizedBox(width: 14),
-                  itemBuilder: (_, i) =>
-                      _SponsorCard(ad: ads[i], isDark: widget.isDark),
+                  itemBuilder: (_, i) => _SponsorCard(
+                    entry: entries[i],
+                    sections: widget.sections,
+                    isDark: widget.isDark,
+                  ),
                 ),
               ),
             ],
@@ -1736,18 +1997,24 @@ class _SponsorsSectionState extends State<_SponsorsSection> {
 }
 
 class _SponsorCard extends StatelessWidget {
-  final AdvertisementModel ad;
+  final _SponsorEntry entry;
+  final List<SectionModel> sections;
   final bool isDark;
 
-  const _SponsorCard({required this.ad, required this.isDark});
+  const _SponsorCard({
+    required this.entry,
+    required this.sections,
+    required this.isDark,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final String cover = ad.coverImage ?? '';
-    final String profile = ad.profileImage ?? '';
-    final String title = ad.title ?? '';
+    final String cover = entry.ad.coverImage ?? '';
+    final String profile = entry.ad.profileImage ?? '';
+    final String adTitle = entry.ad.title ?? '';
+    final VendorModel? vendor = entry.vendor;
 
-    return Container(
+    final card = Container(
       width: 200,
       decoration: BoxDecoration(
         color: isDark ? AppThemeData.grey800 : Colors.white,
@@ -1767,7 +2034,7 @@ class _SponsorCard extends StatelessWidget {
                         .withValues(alpha: 0.08),
                     child: Center(
                       child: Text(
-                        _initials(title),
+                        _initials(vendor?.title ?? adTitle),
                         style: AppThemeData.boldTextStyle(
                           fontSize: 20,
                           color: _ServiceListScreenColors.orange,
@@ -1800,7 +2067,7 @@ class _SponsorCard extends StatelessWidget {
                 ],
                 Expanded(
                   child: Text(
-                    title,
+                    vendor?.title ?? adTitle,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: AppThemeData.boldTextStyle(
@@ -1811,11 +2078,31 @@ class _SponsorCard extends StatelessWidget {
                     ).copyWith(height: 1.2),
                   ),
                 ),
+                if (vendor != null)
+                  const Icon(
+                    Icons.chevron_right_rounded,
+                    color: _ServiceListScreenColors.orange,
+                    size: 16,
+                  ),
               ],
             ),
           ),
         ],
       ),
+    );
+
+    if (vendor == null) return card;
+    return InkWell(
+      borderRadius: BorderRadius.circular(18),
+      onTap: () {
+        final section = _findSectionById(sections, vendor.sectionId);
+        if (section != null) Constant.sectionConstantModel = section;
+        Get.to(
+          const RestaurantDetailsScreen(),
+          arguments: {'vendorModel': vendor},
+        );
+      },
+      child: card,
     );
   }
 }
@@ -2203,6 +2490,14 @@ SectionModel? _findSection(List<SectionModel> sections, String flag) {
   return null;
 }
 
+SectionModel? _findSectionById(List<SectionModel> sections, String? id) {
+  if (id == null || id.trim().isEmpty) return null;
+  for (final s in sections) {
+    if (s.id == id) return s;
+  }
+  return null;
+}
+
 String _joinRoute(String? from, String? to, {required String fallback}) {
   final String f = (from ?? '').trim();
   final String t = (to ?? '').trim();
@@ -2266,3 +2561,17 @@ BoxShadow _microShadow(bool isDark) => BoxShadow(
       blurRadius: 15,
       offset: const Offset(0, 7),
     );
+
+String? _vendorDistanceText(VendorModel vendor) {
+  final loc = Constant.currentLocation;
+  if (loc == null) return null;
+  final lat = vendor.latitude;
+  final lng = vendor.longitude;
+  if (lat == null || lng == null) return null;
+  return '${Constant.getDistance(
+    lat1: loc.latitude.toString(),
+    lng1: loc.longitude.toString(),
+    lat2: lat.toString(),
+    lng2: lng.toString(),
+  )} ${Constant.distanceType}';
+}

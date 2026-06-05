@@ -5,6 +5,7 @@ import 'package:customer/themes/app_them_data.dart';
 import 'package:customer/themes/round_button_fill.dart';
 import 'package:customer/utils/tracking_navigation.dart';
 import '../../controllers/theme_controller.dart';
+import 'parcel_dashboard_screen.dart';
 
 class OrderSuccessfullyPlaced extends StatelessWidget {
   const OrderSuccessfullyPlaced({super.key});
@@ -15,6 +16,29 @@ class OrderSuccessfullyPlaced extends StatelessWidget {
     final themeController = Get.find<ThemeController>();
     final isDark = themeController.isDark.value;
     return Scaffold(
+      appBar: AppBar(
+        backgroundColor: AppThemeData.primary300,
+        automaticallyImplyLeading: false,
+        leading: InkWell(
+          borderRadius: BorderRadius.circular(50),
+          onTap: () => Get.offAll(
+            () => const ParcelDashboardScreen(),
+            arguments: {'initialTab': 1},
+          ),
+          child: Container(
+            margin: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: AppThemeData.grey50,
+            ),
+            child: Icon(Icons.arrow_back_ios_new_rounded, color: AppThemeData.grey900, size: 18),
+          ),
+        ),
+        title: Text(
+          "Commande envoyée".tr,
+          style: AppThemeData.boldTextStyle(fontSize: 18, color: AppThemeData.grey900),
+        ),
+      ),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -45,7 +69,7 @@ class OrderSuccessfullyPlaced extends StatelessWidget {
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 50),
                   child: Text(
-                    "We’ve received your parcel booking and it’s now being processed. You can track its status in real time."
+                    "We've received your parcel booking and it's now being processed. You can track its status in real time."
                         .tr,
                     style: AppThemeData.mediumTextStyle(
                       fontSize: 16,
@@ -70,6 +94,16 @@ class OrderSuccessfullyPlaced extends StatelessWidget {
                     }
                   },
                   color: AppThemeData.primary300,
+                  textColor: AppThemeData.grey900,
+                ),
+                const SizedBox(height: 14),
+                RoundedButtonFill(
+                  title: "Mes colis".tr,
+                  onPress: () => Get.offAll(
+                    () => const ParcelDashboardScreen(),
+                    arguments: {'initialTab': 1},
+                  ),
+                  color: AppThemeData.grey200,
                   textColor: AppThemeData.grey900,
                 ),
               ],

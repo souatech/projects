@@ -13,7 +13,7 @@ class SplashScreen extends StatelessWidget {
       init: SplashController(),
       builder: (controller) {
         return Scaffold(
-          backgroundColor: AppThemeData.primary350,
+          backgroundColor: Colors.white,
           body: Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -24,7 +24,7 @@ class SplashScreen extends StatelessWidget {
                 Text(
                   "JOXMAKO".tr,
                   style: TextStyle(
-                    color: AppThemeData.grey50,
+                    color: AppThemeData.grey900,
                     fontSize: 24,
                     fontFamily: AppThemeData.bold,
                   ),
