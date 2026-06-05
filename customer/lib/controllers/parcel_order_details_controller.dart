@@ -30,6 +30,19 @@ class ParcelOrderDetailsController extends GetxController {
     loadParcelCategories();
     calculateTotalAmount();
     fetchDriverDetails();
+    _refreshOrderStatus();
+  }
+
+  Future<void> _refreshOrderStatus() async {
+    final id = parcelOrder.value.id;
+    if (id == null || id.isEmpty) return;
+    final latest = await FireStoreUtils.getParcelOrder(id);
+    if (latest != null) {
+      parcelOrder.value = latest;
+      setStatusHistoryFromString(latest);
+      calculateTotalAmount();
+      update();
+    }
   }
 
   RxDouble subTotal = 0.0.obs;
@@ -125,8 +138,17 @@ class ParcelOrderDetailsController extends GetxController {
   }
 
   Future<void> cancelParcelOrder() async {
-    if (!_canCancelParcel(parcelOrder.value.status)) {
-      ShowToastDialog.showToast("You can only cancel before pickup.".tr);
+    ShowToastDialog.showLoader("Vérification...".tr);
+    final latestOrder = await FireStoreUtils.getParcelOrder(
+      parcelOrder.value.id ?? '',
+    );
+    ShowToastDialog.closeLoader();
+
+    final realStatus = latestOrder?.status ?? parcelOrder.value.status;
+    if (!_canCancelParcel(realStatus)) {
+      ShowToastDialog.showToast(
+        "Cette livraison ne peut plus être annulée.".tr,
+      );
       return;
     }
     ShowToastDialog.showLoader("Cancelling order...".tr);
@@ -163,7 +185,22 @@ class ParcelOrderDetailsController extends GetxController {
   }
 
   bool _canCancelParcel(String? status) {
-    return status == Constant.orderPlaced;
+    if (status == null) return false;
+    const nonCancellable = {
+      "Order Accepted",
+      "Driver Accepted",
+      "Order Assigned",
+      "Order Ongoing",
+      "Order Shipped",
+      "In Transit",
+      "Pickup Done",
+      "Delivered",
+      "Order Completed",
+      "Order Cancelled",
+      "Order Rejected",
+      "Driver Rejected",
+    };
+    return status == Constant.orderPlaced && !nonCancellable.contains(status);
   }
 
   void loadParcelCategories() async {

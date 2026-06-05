@@ -15,6 +15,10 @@ class ParcelDashboardController extends GetxController {
       const MyBookingScreen(),
       const ProfileScreen(),
     ];
+    final args = Get.arguments;
+    if (args is Map && args['initialTab'] is int) {
+      selectedIndex.value = args['initialTab'] as int;
+    }
     super.onInit();
   }
 

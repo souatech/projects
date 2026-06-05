@@ -1,8 +1,8 @@
-import 'package:customer/models/parcel_order_model.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:customer/themes/app_them_data.dart';
 import 'package:customer/themes/round_button_fill.dart';
+import 'package:customer/screen_ui/parcel_service/parcel_dashboard_screen.dart';
 import 'package:customer/utils/tracking_navigation.dart';
 import '../../controllers/theme_controller.dart';
 
@@ -61,15 +61,23 @@ class OrderSuccessfullyPlaced extends StatelessWidget {
                 RoundedButtonFill(
                   title: "Track Your Order".tr,
                   onPress: () {
-                    if (parcelOrder is ParcelOrderModel) {
-                      TrackingNavigation.openParcel(order: parcelOrder);
-                    } else {
-                      TrackingNavigation.openParcel(
-                        orderId: parcelOrder?.id?.toString(),
-                      );
-                    }
+                    TrackingNavigation.openParcel(
+                      orderId: parcelOrder?.id?.toString(),
+                    );
                   },
                   color: AppThemeData.primary300,
+                  textColor: AppThemeData.grey900,
+                ),
+                const SizedBox(height: 12),
+                RoundedButtonFill(
+                  title: "Mes commandes".tr,
+                  onPress: () {
+                    Get.offAll(
+                      () => const ParcelDashboardScreen(),
+                      arguments: {'initialTab': 1},
+                    );
+                  },
+                  color: AppThemeData.grey200,
                   textColor: AppThemeData.grey900,
                 ),
               ],
