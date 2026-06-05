@@ -63,7 +63,7 @@ class SplashController extends GetxController {
                       Constant.selectedLocation =
                           userModel.shippingAddress!
                               .where((element) => element.isDefault == true)
-                              .single;
+                              .first;
                     } else {
                       Constant.selectedLocation =
                           userModel.shippingAddress!.first;

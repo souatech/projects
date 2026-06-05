@@ -103,7 +103,7 @@ class SignUpController extends GetxController {
       await FireStoreUtils.updateUser(userModel.value).then((value) {
         if (userModel.value.shippingAddress != null && userModel.value.shippingAddress!.isNotEmpty) {
           if (userModel.value.shippingAddress!.where((element) => element.isDefault == true).isNotEmpty) {
-            Constant.selectedLocation = userModel.value.shippingAddress!.where((element) => element.isDefault == true).single;
+            Constant.selectedLocation = userModel.value.shippingAddress!.where((element) => element.isDefault == true).first;
           } else {
             Constant.selectedLocation = userModel.value.shippingAddress!.first;
           }
@@ -144,7 +144,7 @@ class SignUpController extends GetxController {
           await FireStoreUtils.updateUser(userModel.value).then((value) async {
             if (userModel.value.shippingAddress != null && userModel.value.shippingAddress!.isNotEmpty) {
               if (userModel.value.shippingAddress!.where((element) => element.isDefault == true).isNotEmpty) {
-                Constant.selectedLocation = userModel.value.shippingAddress!.where((element) => element.isDefault == true).single;
+                Constant.selectedLocation = userModel.value.shippingAddress!.where((element) => element.isDefault == true).first;
               } else {
                 Constant.selectedLocation = userModel.value.shippingAddress!.first;
               }
