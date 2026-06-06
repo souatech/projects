@@ -205,6 +205,9 @@ class FireStoreUtils {
       if (userModel.orderCabRequestData == null) {
         deletes['ordercabRequestData'] = FieldValue.delete();
       }
+      if (userModel.activeDeviceId == null) {
+        deletes['activeDeviceId'] = FieldValue.delete();
+      }
       await docRef.update(deletes);
 
       if (userModel.id == getCurrentUid()) {
@@ -492,7 +495,9 @@ class FireStoreUtils {
     await Future.forEach(currencyQuery.docs,
         (QueryDocumentSnapshot<Map<String, dynamic>> document) {
       try {
-        parcelOrderList.add(ParcelOrderModel.fromJson(document.data()));
+        final data = Map<String, dynamic>.from(document.data());
+        data['id'] ??= document.id;
+        parcelOrderList.add(ParcelOrderModel.fromJson(data));
       } catch (e) {
         // debugPrint('FireStoreUtils.get Currency Parse error $e');
       }

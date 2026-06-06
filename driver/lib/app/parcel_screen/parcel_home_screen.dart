@@ -1,5 +1,4 @@
 import 'package:driver/app/parcel_screen/parcel_order_details.dart';
-import 'package:driver/app/parcel_screen/parcel_search_screen.dart';
 import 'package:driver/app/parcel_screen/parcel_tracking_screen.dart';
 import 'package:driver/constant/constant.dart';
 import 'package:driver/controllers/parcel_dashboard_controller.dart';
@@ -472,54 +471,23 @@ class ParcelHomeScreen extends StatelessWidget {
                                                       ],
                                                     ),
                                                   ),
-                                                // Tracking button (prominent, above action)
+                                                // Bouton principal : ouvre l'écran map+action
                                                 if (parcelBookingData.status == Constant.driverAccepted || parcelBookingData.status == Constant.orderInTransit)
                                                   Padding(
                                                     padding: const EdgeInsets.symmetric(horizontal: 15),
-                                                    child: OutlinedButton.icon(
-                                                      style: OutlinedButton.styleFrom(
-                                                        minimumSize: const Size.fromHeight(46),
-                                                        side: BorderSide(color: AppThemeData.primary300, width: 1.5),
-                                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                                        foregroundColor: AppThemeData.primary300,
-                                                      ),
-                                                      icon: const Icon(Icons.map_outlined, size: 20),
-                                                      label: Text(
-                                                        "Voir sur la carte".tr,
-                                                        style: TextStyle(fontFamily: AppThemeData.medium, fontSize: 14),
-                                                      ),
-                                                      onPressed: () {
-                                                        Get.to(() => ParcelTrackingScreen(), arguments: {'parcelOrder': parcelBookingData});
+                                                    child: RoundedButtonFill(
+                                                      title: parcelBookingData.status == Constant.driverAccepted
+                                                          ? "Aller au ramassage".tr
+                                                          : "Livrer le colis".tr,
+                                                      height: 5.5,
+                                                      color: AppThemeData.success400,
+                                                      textColor: AppThemeData.grey50,
+                                                      onPress: () {
+                                                        Get.to(() => const ParcelTrackingScreen(),
+                                                            arguments: {'parcelOrder': parcelBookingData});
                                                       },
                                                     ),
                                                   ),
-                                                const SizedBox(height: 10),
-                                                // Action button: Pickup or Deliver
-                                                parcelBookingData.status == Constant.driverAccepted
-                                                    ? Padding(
-                                                        padding: const EdgeInsets.symmetric(horizontal: 15),
-                                                        child: RoundedButtonFill(
-                                                          title: "Pickup Parcel".tr,
-                                                          height: 5.5,
-                                                          color: AppThemeData.success400,
-                                                          textColor: AppThemeData.grey50,
-                                                          onPress: () async {
-                                                            controller.pickupParcel(parcelBookingData);
-                                                          },
-                                                        ),
-                                                      )
-                                                    : Padding(
-                                                        padding: const EdgeInsets.symmetric(horizontal: 15),
-                                                        child: RoundedButtonFill(
-                                                          title: "Deliver Parcel".tr,
-                                                          height: 5.5,
-                                                          color: AppThemeData.success400,
-                                                          textColor: AppThemeData.grey50,
-                                                          onPress: () async {
-                                                            _showParcelPaymentDialog(context, isDark, controller, parcelBookingData);
-                                                          },
-                                                        ),
-                                                      ),
                                                 const SizedBox(height: 16),
                                               ],
                                             ),
@@ -534,145 +502,4 @@ class ParcelHomeScreen extends StatelessWidget {
     });
   }
 
-  void _showParcelPaymentDialog(BuildContext context, bool isDark, ParcelHomeController controller, parcelBookingData) {
-    String selectedMethod = 'Espèces';
-    Get.dialog(
-      StatefulBuilder(builder: (context, setState) {
-        return Dialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          insetPadding: const EdgeInsets.symmetric(horizontal: 20),
-          backgroundColor: isDark ? const Color(0xFF1E1E1E) : AppThemeData.grey50,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        "Le client a payé via :".tr,
-                        style: TextStyle(
-                          color: isDark ? AppThemeData.grey50 : AppThemeData.grey900,
-                          fontSize: 18,
-                          fontFamily: AppThemeData.semiBold,
-                        ),
-                      ),
-                    ),
-                    InkWell(onTap: () => Get.back(), child: const Icon(Icons.close, size: 22)),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                RadioListTile<String>(
-                  value: 'Espèces',
-                  groupValue: selectedMethod,
-                  activeColor: AppThemeData.primary300,
-                  title: Text("Espèces".tr, style: TextStyle(color: isDark ? AppThemeData.grey50 : AppThemeData.grey900, fontFamily: AppThemeData.medium)),
-                  onChanged: (v) => setState(() => selectedMethod = v!),
-                ),
-                RadioListTile<String>(
-                  value: 'Wave',
-                  groupValue: selectedMethod,
-                  activeColor: AppThemeData.primary300,
-                  title: Text("Wave", style: TextStyle(color: isDark ? AppThemeData.grey50 : AppThemeData.grey900, fontFamily: AppThemeData.medium)),
-                  onChanged: (v) => setState(() => selectedMethod = v!),
-                ),
-                RadioListTile<String>(
-                  value: 'Orange Money',
-                  groupValue: selectedMethod,
-                  activeColor: AppThemeData.primary300,
-                  title: Text("Orange Money", style: TextStyle(color: isDark ? AppThemeData.grey50 : AppThemeData.grey900, fontFamily: AppThemeData.medium)),
-                  onChanged: (v) => setState(() => selectedMethod = v!),
-                ),
-                // ── Récapitulatif GP (si colis GP) ──────────────────────────
-                Builder(builder: (_) {
-                  final double driverFee = double.tryParse(parcelBookingData.collectionFee ?? '0') ?? 0;
-                  final bool isGp = driverFee > 0;
-                  final bool driverCollectsGP = parcelBookingData.customerPaysFullAmountToDriver == true;
-                  if (!isGp) return const SizedBox.shrink();
-                  final double gpAmount = double.tryParse(parcelBookingData.subTotal ?? '0') ?? 0;
-
-                  // Commissions (stored after completion, estimated before)
-                  final double commDriver = parcelBookingData.driverAdminCommAmount ?? 0;
-                  final double commGp = parcelBookingData.gpAdminCommAmount ?? 0;
-                  final double gainDriver = parcelBookingData.driverEarning ?? (driverFee - commDriver);
-                  final double gainGp = parcelBookingData.gpEarning ?? (gpAmount - commGp);
-
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const SizedBox(height: 12),
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFFF3CD),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: const Color(0xFFFFCC00)),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('Récapitulatif Colis GP', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF6B4F00))),
-                            const SizedBox(height: 8),
-                            _gpRow('Frais livreur :', Constant.amountShow(amount: driverFee.toString())),
-                            _gpRow('Montant GP :', Constant.amountShow(amount: gpAmount.toString())),
-                            const Divider(color: Color(0xFFFFCC00), height: 12),
-                            _gpRow('Commission admin (livraison) :', Constant.amountShow(amount: commDriver.toString())),
-                            _gpRow('Commission admin (GP) :', Constant.amountShow(amount: commGp.toString())),
-                            const Divider(color: Color(0xFFFFCC00), height: 12),
-                            _gpRow('Gain livreur net :', Constant.amountShow(amount: gainDriver.toString())),
-                            _gpRow('Gain GP net :', Constant.amountShow(amount: gainGp.toString())),
-                            if (driverCollectsGP) ...[
-                              const Divider(color: Color(0xFFFFCC00), height: 12),
-                              _gpRow('Cash à remettre (GP) :', Constant.amountShow(amount: gpAmount.toString())),
-                              const SizedBox(height: 4),
-                              const Text('⚠️ Le montant GP collecté est à remettre à l\'admin', style: TextStyle(fontSize: 11, color: Color(0xFF6B4F00), fontStyle: FontStyle.italic)),
-                            ],
-                          ],
-                        ),
-                      ),
-                    ],
-                  );
-                }),
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppThemeData.primary300,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                    onPressed: () async {
-                      Get.back();
-                      await controller.completeParcel(parcelBookingData, collectedPaymentMethod: selectedMethod);
-                    },
-                    child: Text(
-                      "Confirmer la livraison".tr,
-                      style: const TextStyle(color: Colors.white, fontSize: 16, fontFamily: AppThemeData.medium),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      }),
-    );
-  }
-
-  Widget _gpRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: const TextStyle(fontSize: 12, color: Color(0xFF6B4F00))),
-          Text(value, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF6B4F00))),
-        ],
-      ),
-    );
-  }
 }

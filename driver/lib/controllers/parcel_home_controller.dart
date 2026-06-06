@@ -111,7 +111,13 @@ class ParcelHomeController extends GetxController {
       }
     });
 
+    await FireStoreUtils.fireStore
+        .collection(CollectionName.users)
+        .doc(FireStoreUtils.getCurrentUid())
+        .update({'orderParcelRequestData': FieldValue.delete()});
+
     ShowToastDialog.closeLoader();
+    Get.back();
   }
 
   Future<void> updateCabWalletAmount(ParcelOrderModel orderModel) async {

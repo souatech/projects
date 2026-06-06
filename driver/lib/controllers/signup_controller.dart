@@ -337,7 +337,7 @@ class SignupController extends GetxController {
     userModel.value.email = emailEditingController.value.text.toLowerCase();
     userModel.value.phoneNumber = phoneNUmberEditingController.value.text;
     userModel.value.role = Constant.userRoleDriver;
-    userModel.value.isActive = false;
+    userModel.value.isActive = Constant.autoApproveDriver == true ? true : false;
     userModel.value.active = Constant.autoApproveDriver == true ? true : false;
     userModel.value.isDocumentVerify = selectedValue.value == "Company"
         ? Constant.isOwnerVerification == true

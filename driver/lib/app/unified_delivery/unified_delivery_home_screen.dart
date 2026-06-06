@@ -4,9 +4,11 @@ import 'package:driver/app/edit_profile_screen/edit_profile_screen.dart';
 import 'package:driver/app/home_screen/home_screen.dart';
 import 'package:driver/app/parcel_screen/parcel_dashboard_screen.dart';
 import 'package:driver/app/parcel_screen/parcel_order_details.dart';
+import 'package:driver/app/parcel_screen/parcel_tracking_screen.dart';
 import 'package:driver/app/unified_delivery/unified_delivery_controller.dart';
 import 'package:driver/app/wallet_screen/wallet_screen.dart';
 import 'package:driver/constant/constant.dart';
+import 'package:driver/controllers/parcel_home_controller.dart';
 import 'package:driver/themes/app_them_data.dart';
 import 'package:driver/themes/round_button_fill.dart';
 import 'package:driver/themes/theme_controller.dart';
@@ -156,7 +158,16 @@ class UnifiedDeliveryHomeScreen extends StatelessWidget {
         arguments: {"orderModel": job.vendorOrder},
       );
     } else if (job.kind == DeliveryJobKind.parcel && job.parcelOrder != null) {
-      Get.to(() => const ParcelOrderDetails(), arguments: job.parcelOrder);
+      final s = job.status;
+      if (s == Constant.driverAccepted || s == Constant.orderInTransit) {
+        if (!Get.isRegistered<ParcelHomeController>()) {
+          Get.put(ParcelHomeController());
+        }
+        Get.to(() => const ParcelTrackingScreen(),
+            arguments: {'parcelOrder': job.parcelOrder});
+      } else {
+        Get.to(() => const ParcelOrderDetails(), arguments: job.parcelOrder);
+      }
     }
   }
 
@@ -352,6 +363,18 @@ class _DeliveryJobCard extends StatelessWidget {
                     ),
                   ),
                 ],
+              )
+            else if (job.kind == DeliveryJobKind.parcel &&
+                (job.status == Constant.driverAccepted ||
+                    job.status == Constant.orderInTransit))
+              RoundedButtonFill(
+                title: job.status == Constant.driverAccepted
+                    ? "Aller au ramassage".tr
+                    : "Livrer le colis".tr,
+                color: AppThemeData.success400,
+                textColor: Colors.white,
+                height: 5,
+                onPress: onDetails,
               )
             else
               RoundedButtonFill(

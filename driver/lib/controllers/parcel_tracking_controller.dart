@@ -349,6 +349,38 @@ class ParcelTrackingController extends GetxController {
    isLoading.value = false;
   }
 
+  // Called from onMapCreated (Google Maps) to immediately center on driver + destination.
+  void moveToDriverPosition() {
+    final lat = (Constant.locationDataFinal?.latitude ??
+            Constant.userModel?.location?.latitude)
+        ?.toDouble();
+    final lng = (Constant.locationDataFinal?.longitude ??
+            Constant.userModel?.location?.longitude)
+        ?.toDouble();
+    if (lat == null || lng == null || lat == 0 || lng == 0) return;
+
+    final status = orderModel.value.status;
+    double? destLat, destLng;
+    if (status == Constant.driverAccepted) {
+      destLat = orderModel.value.senderLatLong?.latitude?.toDouble();
+      destLng = orderModel.value.senderLatLong?.longitude?.toDouble();
+    } else if (status == Constant.orderInTransit) {
+      destLat = orderModel.value.receiverLatLong?.latitude?.toDouble();
+      destLng = orderModel.value.receiverLatLong?.longitude?.toDouble();
+    }
+
+    if (mapController == null) return;
+    if (destLat != null && destLng != null && destLat != 0 && destLng != 0) {
+      _animateCameraBounds(LatLng(lat, lng), LatLng(destLat, destLng));
+    } else {
+      mapController!.animateCamera(
+        CameraUpdate.newCameraPosition(
+          CameraPosition(target: LatLng(lat, lng), zoom: 14),
+        ),
+      );
+    }
+  }
+
   void _listenToOrder() {
     orderSubscription =
         FireStoreUtils.fireStore.collection(CollectionName.parcelOrders).doc(orderModel.value.id).snapshots().listen((event) {
